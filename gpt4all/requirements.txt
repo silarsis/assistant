@@ -1,0 +1,5 @@
+pyllamacpp
+websockets
+loguru
+nest_asyncio
+huggingface_hub
