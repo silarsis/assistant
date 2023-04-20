@@ -1,6 +1,7 @@
 import asyncio
 import sys
 from websockets.server import serve
+from websockets.exceptions import ConnectionClosedError
 import json
 from prompt_parser import GPT4All
 import nest_asyncio
@@ -34,24 +35,26 @@ class API:
         await writer.drain()
             
     async def ws_send_coroutine(self, websocket, prompt: str, payload: str, type: str, correlation_id: str):
-        # Form the actual response from the payload
         response = {"type": type, "payload": payload, "correlationId": correlation_id, "prompt": prompt}
-        # Send
         await websocket.send(json.dumps(response))
 
     async def handle_ws_connection(self, websocket):
-        print("WS connection")
-        async for message in websocket:
-            print("Received message " + str(message), flush=True)
-            try:
-                m=json.loads(message)
-            except json.JSONDecodeError as e:
-                print(str(e), flush=True)
-                continue
-            if (m.get("type") == 'prompt'):
-                correlation_id=f'{uuid.uuid4()}'
-                callback = lambda x:self.ws_loop.run_until_complete(self.ws_send_coroutine(websocket, m["prompt"], x, 'response', correlation_id))
-                await self.bot.prompt_callback(m["prompt"], callback=callback)
+        print("WS connection", flush=True)
+        try:
+            async for message in websocket:
+                print("Received message " + str(message), flush=True)
+                try:
+                    m=json.loads(message)
+                except json.JSONDecodeError as e:
+                    print(str(e), flush=True)
+                    continue
+                if (m.get("type") == 'prompt'):
+                    correlation_id=f'{uuid.uuid4()}'
+                    callback = lambda x:self.ws_loop.run_until_complete(self.ws_send_coroutine(websocket, m["prompt"], x, 'response', correlation_id))
+                    await self.bot.prompt_callback(m["prompt"], callback=callback)
+        except ConnectionClosedError:
+            print("WS connection broken", flush=True)
+            await websocket.close()
 
     async def main(self):
         print("Launching WS server", flush=True)
