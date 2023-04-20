@@ -1,5 +1,9 @@
 import tkinter as tk
 import socket
+import threading
+import speech_recognition as sr
+
+
 
 class Application(tk.Frame):
     def __init__(self, master):
@@ -13,11 +17,13 @@ class Application(tk.Frame):
         self.hostname_label = tk.Label(self, text="Hostname:")
         self.hostname_label.pack()
         self.hostname_entry = tk.Entry(self)
+        self.hostname_entry.insert(0, "localhost")
         self.hostname_entry.pack()
 
         self.port_label = tk.Label(self, text="Port:")
         self.port_label.pack()
         self.port_entry = tk.Entry(self)
+        self.port_entry.insert(0, "8000")
         self.port_entry.pack()
 
         self.connect_button = tk.Button(self, text="Connect", command=self.connect)
@@ -65,12 +71,31 @@ class Application(tk.Frame):
 
     def send(self):
         message = self.message_entry.get()
-        self.socket.sendall(message.encode())
+        self.socket.sendall(message.encode() + b'\n')
         response = self.socket.recv(1024).decode()
         self.response_text.configure(state=tk.NORMAL)
         self.response_text.delete(1.0, tk.END)
         self.response_text.insert(tk.END, response)
         self.response_text.configure(state=tk.DISABLED)
+        
+    def speech_to_text(self):
+        recognizer = sr.Recognizer()
+        mic = sr.Microphone()
+
+        with mic as source:
+            recognizer.adjust_for_ambient_noise(source)
+
+        while True:
+            with mic as source:
+                audio = recognizer.listen(source)
+                try:
+                    message = recognizer.recognize_google(audio)
+                    self.message_entry.delete(0, tk.END)
+                    self.message_entry.insert(0, message)
+                except sr.UnknownValueError:
+                    pass
+                except sr.RequestError:
+                    pass
 
     def quit(self):
         self.disconnect()
