@@ -5,5 +5,7 @@ EXPOSE 3000
 WORKDIR /app
 COPY client .
 
-RUN npm install
+# Temporary hack fix for SSL intercept on some machines
+RUN npm config set strict-ssl false && npm install
+
 CMD ["/usr/local/bin/npm", "run", "start"]
