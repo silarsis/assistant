@@ -3,3 +3,4 @@ websockets
 loguru
 nest_asyncio
 huggingface_hub
+python-dotenv

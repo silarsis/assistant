@@ -1,13 +1,19 @@
 import asyncio
 import sys
+import os
 from websockets.server import serve
 from websockets.exceptions import ConnectionClosedError
 import json
 from prompt_parser import GPT4All
 import nest_asyncio
 import uuid
+from dotenv import load_dotenv
 
+load_dotenv()
 nest_asyncio.apply()
+
+if os.getenv('INSECURE') and bool(os.getenv('INSECURE')):
+    ssl.SSLContext.verify_mode = property(lambda self: ssl.CERT_NONE, lambda self, newval: None)
 
 class API:
     web_host = '0.0.0.0'

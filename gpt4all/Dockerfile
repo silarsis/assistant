@@ -15,7 +15,6 @@ RUN if [ "`uname -m`" = "aarch64" ]; then \
 RUN pip install --no-cache-dir -r requirements.txt
 
 ENV HUGGINGFACE_HUB_CACHE /models/
-ENV REQUESTS_CA_BUNDLE=
 
 COPY . .
 
