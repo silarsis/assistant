@@ -1,6 +1,6 @@
 import asyncio
-import sys
 import os
+import ssl
 from websockets.server import serve
 from websockets.exceptions import ConnectionClosedError
 import json
