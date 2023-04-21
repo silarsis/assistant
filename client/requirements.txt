@@ -1,3 +1,5 @@
 websockets
 SpeechRecognition
 PyAudio
+pyttsx3
+pygame

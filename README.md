@@ -36,6 +36,7 @@ Other projects that have been an inspiration include:
   * Dalai
   * Milvus
   * https://github.com/Venthe/chatgpt4all-webui
+  * https://github.com/randaller/llama-chat
 
 
 ## Plans

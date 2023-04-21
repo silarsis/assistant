@@ -4,16 +4,21 @@ from websockets.sync.client import connect
 from websockets.exceptions import ConnectionClosed, ConnectionClosedError
 import speech_recognition as sr
 import threading
+import pyttsx3
+import pygame
+import queue
 
 
 class Application(tk.Frame):
     def __init__(self, master):
         super().__init__(master)
+        self._ending = False
         self.master = master
         self.master.title("Zen Client")
         self.websocket = None
         self.pack()
         self.create_widgets()
+        self.start_speech_thread()
 
     def create_widgets(self):
         # Host to connect to
@@ -117,6 +122,7 @@ class Application(tk.Frame):
                     except:
                         print("Garbled message, ignoring...")
                     self.response_text.after(10, self.add_to_response_text, payload)
+                    self._tts.put(payload)
             except ConnectionClosed:
                 return
             except TypeError: # NoneType is not iterable
@@ -142,11 +148,34 @@ class Application(tk.Frame):
                     print("Could not understand audio")
                 except sr.RequestError as e:
                     print("Could not request results from Google Speech Recognition service; {0}".format(e))
+                    
+    def start_speech_thread(self):
+        self._tts = queue.Queue()
+        thread = threading.Thread(target=self.talk)
+        thread.start()
+        
+    def talk(self):
+        " setup the tts engine and then continually consume from the queue and speak "
+        engine = pyttsx3.init()
+        pygame.mixer.init()
+        while True:
+            try:
+                text = self._tts.get(block=True, timeout=1)
+            except queue.Empty:
+                if self._ending:
+                    engine.say("Shutting down")
+                    engine.runAndWait()
+                    return
+                continue
+            engine.say(text)
+            print(f"Saying {text}")
+            engine.runAndWait()
 
     def quit(self):
+        self._ending = True
         self.closed_connection()
         self.master.destroy()
-        
+
 root = tk.Tk()
 app = Application(root)
 app.mainloop()
