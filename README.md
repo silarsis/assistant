@@ -3,6 +3,14 @@
 This project is to tie together various LLM-related pieces, to try and build an AI assistant that can research and provide feedback on things I'm working on.
 It is very heavily inspired by autogpt, but with a different purpose and structure and overall features
 
+## How to Use
+
+Checkout the code, and in the base directory run `docker compose build` (or your equivalent), then `docker compose up`.
+It _should_ just work out of the box.
+
+If you have API keys for various things, you can look at the .env-template files - rename them to .env and add
+keys or configurations as needed. You can find them in each of the sub-directories from the main dir.
+
 ## Goals
 
 An app that does the following:
