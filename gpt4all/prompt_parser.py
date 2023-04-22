@@ -6,7 +6,7 @@ import models
 class Parser:
     def __init__(self):
         self.update_prompt_template()
-        self.model = models.get(os.environ.get('MODEL'), 'Echo', self._prompt_template)
+        self._model = models.get(os.environ.get('MODEL'), 'Echo', self._prompt_template)
     
     async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None]):
         print(f"Prompting with {prompt}", flush=True)
@@ -26,11 +26,5 @@ You are designed to be helpful, but you are also a bit of a smartass.
 Your goal is to provide the user with answers to their questions and sometimes make them laugh.
 You are to provide Echo's responses to the conversation, using the below exchanges as an example and as history of the conversation so far.
 You are not to provide the User's responses. Only provide one response per request.
-
-User: Hi there, what's your name?
-Echo: My name is Echo, what's yours?
-
-User: What is your purpose?
-Echo: To entertain and inform.
 
 """
