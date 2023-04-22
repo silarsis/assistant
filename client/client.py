@@ -1,12 +1,13 @@
 import tkinter as tk
+from tkinter import ttk
 import json
 from websockets.sync.client import connect
 from websockets.exceptions import ConnectionClosed, ConnectionClosedError
 import speech_recognition as sr
+from speech import Speech
 import threading
-import pyttsx3
-import pygame
-import queue
+
+STOP_STR = "###STOP###"
 
 
 class Application(tk.Frame):
@@ -14,11 +15,11 @@ class Application(tk.Frame):
         super().__init__(master)
         self._ending = False
         self.master = master
-        self.master.title("Zen Client")
+        self.master.title("Echo Client")
         self.websocket = None
         self.pack()
         self.create_widgets()
-        self.start_speech_thread()
+        self.speech = Speech()
 
     def create_widgets(self):
         # Host to connect to
@@ -43,21 +44,20 @@ class Application(tk.Frame):
         self.stop_listening_button = tk.Button(self.master, text="Stop Listening", command=self.stop_listening, state=tk.DISABLED)
         self.stop_listening_button.pack()
 
-        self.send_button = tk.Button(self, text="Send", command=self.send, state=tk.DISABLED)
-        self.send_button.pack()
-
-        self.quit_button = tk.Button(self, text="Quit", command=self.quit)
+        self.quit_button = tk.Button(self.master, text="Quit", command=self.quit)
         self.quit_button.pack()
 
-        self.message_label = tk.Label(self, text="Message:")
-        self.message_label.pack()
-        self.message_entry = tk.Entry(self, state=tk.DISABLED)
-        self.message_entry.pack()
+        message_frame = tk.LabelFrame(self.master, text="Message:")
+        self.message_entry = tk.Entry(message_frame, state=tk.DISABLED)
+        self.message_entry.pack(side="left", padx=5, pady=5)
+        self.send_button = tk.Button(message_frame, text="Send", command=self.send, state=tk.DISABLED)
+        self.send_button.pack(side="left", padx=5, pady=5)
+        message_frame.pack(fill=tk.X)
 
-        self.response_label = tk.Label(self, text="Response:")
-        self.response_label.pack()
-        self.response_text = tk.Text(self, height=20, state=tk.DISABLED)
-        self.response_text.pack(fill=tk.BOTH, expand=True)
+        response_frame = tk.LabelFrame(self.master, text="Response:")
+        self.response_text = tk.Text(response_frame, height=20, state=tk.DISABLED)
+        self.response_text.pack(side="bottom", fill=tk.BOTH, expand=True)
+        response_frame.pack(fill=tk.BOTH)
 
     def start_listening(self):
         self.listen_button.configure(state=tk.DISABLED)
@@ -116,13 +116,13 @@ class Application(tk.Frame):
         while True:
             try:
                 for message in self.websocket:
-                    print(f"Received: {message}")
+                    #print(f"Received: {message}")
                     try:
                         payload = json.loads(message)['payload']
                     except:
                         print("Garbled message, ignoring...")
                     self.response_text.after(10, self.add_to_response_text, payload)
-                    self._tts.put(payload)
+                    self.speech.say(payload)
             except ConnectionClosed:
                 return
             except TypeError: # NoneType is not iterable
@@ -148,34 +148,15 @@ class Application(tk.Frame):
                     print("Could not understand audio")
                 except sr.RequestError as e:
                     print("Could not request results from Google Speech Recognition service; {0}".format(e))
-                    
-    def start_speech_thread(self):
-        self._tts = queue.Queue()
-        thread = threading.Thread(target=self.talk)
-        thread.start()
-        
-    def talk(self):
-        " setup the tts engine and then continually consume from the queue and speak "
-        engine = pyttsx3.init()
-        pygame.mixer.init()
-        while True:
-            try:
-                text = self._tts.get(block=True, timeout=1)
-            except queue.Empty:
-                if self._ending:
-                    engine.say("Shutting down")
-                    engine.runAndWait()
-                    return
-                continue
-            engine.say(text)
-            print(f"Saying {text}")
-            engine.runAndWait()
 
     def quit(self):
-        self._ending = True
+        self.speech.quit()
         self.closed_connection()
         self.master.destroy()
 
 root = tk.Tk()
 app = Application(root)
-app.mainloop()
+try:
+    app.mainloop()
+except KeyboardInterrupt:
+    app.quit()
