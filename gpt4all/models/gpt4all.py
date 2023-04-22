@@ -1,6 +1,5 @@
 from huggingface_hub import hf_hub_download
 from pyllamacpp.model import Model
-import concurrent.futures
 from typing import Callable
 from .generic import ModelClass
 
