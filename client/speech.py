@@ -34,6 +34,11 @@ class ElevenLabs:
                 playsound("speech.mpeg", True)
             except PlaysoundException:
                 print("Failed to play sound", flush=True)
+                time.sleep(1)
+                try:
+                    playsound("speech.mpeg", True)
+                except PlaysoundException:
+                    print("Failed to play sound again", flush=True)
             os.remove("speech.mpeg")
             return True
         else:
