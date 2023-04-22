@@ -12,7 +12,8 @@ from dotenv import load_dotenv
 load_dotenv()
 nest_asyncio.apply()
 
-if os.getenv('INSECURE') and bool(os.getenv('INSECURE')):
+if os.getenv('INSECURE'):
+    print("Disabling SSL checks", flush=True)
     ssl.SSLContext.verify_mode = property(lambda self: ssl.CERT_NONE, lambda self, newval: None)  # noqa: E501
 
 class API:
