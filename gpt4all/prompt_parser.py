@@ -1,12 +1,12 @@
 from typing import Callable
-from models.gpt4all import GPT4All
+import os
+import models
 
 
 class Parser:
     def __init__(self):
         self.update_prompt_template()
-        # Hard coded to GTP4All atm
-        self._model = GPT4All('Echo', self._prompt_template)
+        self.model = models.get(os.environ.get('MODEL'), 'Echo', self._prompt_template)
     
     async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None]):
         print(f"Prompting with {prompt}", flush=True)

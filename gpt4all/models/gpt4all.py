@@ -10,7 +10,6 @@ class GPT4All(ModelClass):
         self._message_history = []
         self.name = name
         self._prompt_template = prompt_template + '{history_of_questions}\n'
-        self._pool = concurrent.futures.ThreadPoolExecutor()
         # Make sure we have the model we want to use
         print("Downloading / ensuring model exists...", flush=True)
         hf_hub_download(
@@ -25,7 +24,7 @@ class GPT4All(ModelClass):
     def update_prompt_template(self, new_template: str):
         self._prompt_template = new_template + '{history_of_questions}\n'
         
-    async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None]):
+    async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None]) -> None:  # noqa: E501
         """
         Write a prompt to the bot and callback with the response.
         """
@@ -39,7 +38,7 @@ class GPT4All(ModelClass):
                 n_threads=8)
         print("Prompt all done", flush=True)
         
-    def prompt(self, prompt: str):
+    def prompt(self, prompt: str) -> str:
         """
         Write a prompt to the bot and return the response.
         """
@@ -73,7 +72,7 @@ class GPT4All(ModelClass):
         
     def _wrapped_prompt(self, prompt: str):
         " Take user input, wrap it in a conversational prompt, and return the result "
-        history_of_questions = '\n\n'.join(  # noqa: F841
+        history_of_questions = '\n\n'.join(
             [ self._translate(item) for item in self._message_history ][-20:]) # Note, this includes the current prompt
         full_prompt = self._prompt_template.format(history_of_questions=history_of_questions, name=self.name)
         self._message_history[-1]['full_prompt'] = full_prompt
