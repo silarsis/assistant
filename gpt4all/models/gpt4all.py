@@ -53,9 +53,6 @@ class GPT4All(ModelClass):
         current_item = self._message_history[-1]
         # Record all past plus this token
         response_so_far = current_item.setdefault('bot', '')
-        if not response_so_far and (text == f'{self.name}:'):
-            # This means it's trying to add it's own name - block that
-            text = ''
         bot = response_so_far + text
         self._message_history[-1]['bot'] = bot
         # Only respond once we've finished with the prompt
@@ -66,6 +63,8 @@ class GPT4All(ModelClass):
         user = history.get('user', '')
         bot = history.get('bot', '').split('\n')[-1]
         if bot:
+            if bot.startswith(f'{self.name}: '):
+                return f'User: {user}\n{bot}'
             return f'User: {user}\n{self.name}: {bot}'
         return f'User: {user}'
         
