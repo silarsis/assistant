@@ -1,14 +1,20 @@
-from huggingface_hub import hf_hub_download
-from pyllamacpp.model import Model
+# from huggingface_hub import hf_hub_download
+
 from typing import Callable
 from .generic import ModelClass
 
+from langchain.tools import hf_hub_download
+from langchain.callbacks.base import CallbackManager
+from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+from langchain.llms import GPT4All
 
-class GPT4All(ModelClass):
+
+class Model(ModelClass):
     def __init__(self, name: str, prompt_template: str):
         self._message_history = []
         self.name = name
-        self._prompt_template = prompt_template + '{history_of_questions}\n'
+        self._prompt_template = prompt_template
+        self._patch_prompt_template()
         # Make sure we have the model we want to use
         print("Downloading / ensuring model exists...", flush=True)
         hf_hub_download(
@@ -17,13 +23,21 @@ class GPT4All(ModelClass):
             local_dir=".")
         print("Model download complete", flush=True)
         # Load the model
+        from pyllamacpp.model import Model
         self.model = Model(ggml_model='ggjt-model.bin', n_ctx=2000)
         print("Model loaded", flush=True)
         
-    def update_prompt_template(self, new_template: str):
-        self._prompt_template = new_template + '{history_of_questions}\n'
+    def _patch_prompt_template(self):
+        self._prompt_template = self._prompt_template + """
+You are to provide Echo's responses to the conversation, using the below exchanges as an example and as history of the conversation so far.
+You are not to provide the User's responses. Only provide one response per request."""
+        self._prompt_template = self._prompt_template + '{history_of_questions}\n'
         
-    async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None]) -> None:  # noqa: E501
+    def update_prompt_template(self, new_template: str):
+        self._prompt_template = new_template
+        self._patch_prompt_template()
+        
+    async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None]) -> None:
         """
         Write a prompt to the bot and callback with the response.
         """
@@ -75,3 +89,15 @@ class GPT4All(ModelClass):
         full_prompt = self._prompt_template.format(history_of_questions=history_of_questions, name=self.name)
         self._message_history[-1]['full_prompt'] = full_prompt
         return full_prompt
+    
+def get_model_for_chain():
+    hf_hub_download(
+            repo_id="LLukas22/gpt4all-lora-quantized-ggjt", 
+            filename="ggjt-model.bin", 
+            local_dir=".")
+    print("Model download complete", flush=True)
+    # Callbacks support token-wise streaming
+    callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
+    # Verbose is required to pass to the callback manager
+    llm = GPT4All(model='./models/ggjt-model.bin', callback_manager=callback_manager, verbose=True)
+    return llm

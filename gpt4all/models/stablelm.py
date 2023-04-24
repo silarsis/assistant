@@ -21,7 +21,7 @@ class StopOnTokens(StoppingCriteria):
 
 # prompt = f"{system_prompt}<|USER|>What's your mood today?<|ASSISTANT|>"
 
-class StableLM(ModelClass):
+class Model(ModelClass):
     def __init__(self, name: str, prompt_template: str):
         self._message_history = []
         self.name = name

@@ -34,11 +34,6 @@ class ElevenLabs:
                 playsound("speech.mpeg", True)
             except PlaysoundException:
                 print("Failed to play sound", flush=True)
-                time.sleep(1)
-                try:
-                    playsound("speech.mpeg", True)
-                except PlaysoundException:
-                    print("Failed to play sound again", flush=True)
             os.remove("speech.mpeg")
             return True
         else:
@@ -66,6 +61,7 @@ class Speech:
         thread.start()
         
     def quit(self):
+        " Set a flag to stop the talk thread and wait for the timeout - runs in main thread "
         self._ending = True
         time.sleep(TIMEOUT)
             
@@ -87,5 +83,5 @@ class Speech:
                 words_to_say.append(text)
                 
     def say(self, text: str):
-        " This puts incoming words on the queue "
+        " This puts incoming words on the queue, runs in the main thread "
         self._incomingQueue.put(text)

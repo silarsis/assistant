@@ -2,7 +2,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from .generic import ModelClass
 from typing import Callable
 
-class Vicuna(ModelClass):
+class Model(ModelClass):
     def __init__(self, name: str, prompt_template: str):
         self._message_history = []
         self.name = name
