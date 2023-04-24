@@ -6,3 +6,6 @@ huggingface_hub
 python-dotenv
 transformers
 accelerate
+langchain
+openai
+google-api-python-client

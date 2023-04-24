@@ -14,7 +14,7 @@ nest_asyncio.apply()
 
 if os.getenv('INSECURE'):
     print("Disabling SSL checks", flush=True)
-    ssl.SSLContext.verify_mode = property(lambda self: ssl.CERT_NONE, lambda self, newval: None)  # noqa: E501
+    ssl.SSLContext.verify_mode = property(lambda self: ssl.CERT_NONE, lambda self, newval: None)
 
 class API:
     web_host = '0.0.0.0'
@@ -43,8 +43,8 @@ class API:
                     self.text_send_coroutine(x, writer=writer))
             await self.bot.prompt_with_callback(prompt, callback=callback)
             
-    async def ws_send_coroutine(self, websocket, prompt: str, payload: str, type: str, correlation_id: str):  # noqa: E501
-        response = {"type": type, "payload": payload, "correlationId": correlation_id, "prompt": prompt}  # noqa: E501
+    async def ws_send_coroutine(self, websocket, prompt: str, payload: str, type: str, correlation_id: str):
+        response = {"type": type, "payload": payload, "correlationId": correlation_id, "prompt": prompt}
         await websocket.send(json.dumps(response))
 
     async def handle_ws_connection(self, websocket):
