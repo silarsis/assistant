@@ -6,7 +6,8 @@ It is very heavily inspired by autogpt, but with a different purpose and structu
 ## How to Use
 
 Checkout the code, and in the base directory run `docker compose build` (or your equivalent), then `docker compose up`.
-It _should_ just work out of the box.
+It _should_ just work out of the box. However, the default agent setup is now pointing at Azure OpenAI so you'll need
+keys for that, as well as for whatever tools are setup in the tools list.
 
 If you have API keys for various things, you can look at the .env-template files - rename them to .env and add
 keys or configurations as needed. You can find them in each of the sub-directories from the main dir.
@@ -21,6 +22,7 @@ An app that does the following:
   * Can Google and do self-feedback in the way auto-gpt does
   * Pluggable models and a clear abstraction for them in the code, for future extensibility
   * A longer-term memory and the ability to use that memory with local models (ie. sidestep the current API limits)
+  * Visual inputs from a camera and image recognition
 
 Beyond the above, this repo is for experimentation and to help me understand things like fine-tuning and in-context learning
 
