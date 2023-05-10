@@ -48,10 +48,10 @@ class Application(tk.Frame):
         self.quit_button.pack()
 
         message_frame = tk.LabelFrame(self.master, text="Message:")
-        self.message_entry = tk.Entry(message_frame, state=tk.DISABLED)
+        self.message_entry = tk.Text(message_frame, height=5, state=tk.DISABLED)
         self.message_entry.pack(side="left", padx=5, pady=5)
         self.send_button = tk.Button(message_frame, text="Send", command=self.send, state=tk.DISABLED)
-        self.send_button.pack(side="left", padx=5, pady=5)
+        self.send_button.pack(side="right", padx=5, pady=5)
         message_frame.pack(fill=tk.X)
 
         response_frame = tk.LabelFrame(self.master, text="Response:")
@@ -97,7 +97,7 @@ class Application(tk.Frame):
             self.closed_connection()
 
     def send(self):
-        message = self.message_entry.get().encode()
+        message = self.message_entry.get(1.0, "end-1c").encode()
         try:
             self.websocket.send(json.dumps({'prompt':message.decode('utf-8'), 'type':'prompt'}))
         except ConnectionClosedError:
