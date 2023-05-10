@@ -3,7 +3,7 @@ from langchain.prompts import BaseChatPromptTemplate
 from langchain import LLMChain
 from langchain.utilities import GoogleSearchAPIWrapper
 from langchain.utilities.wolfram_alpha import WolframAlphaAPIWrapper
-from langchain.chat_models import AzureChatOpenAI
+from langchain.chat_models import AzureChatOpenAI, ChatOpenAI
 from typing import List, Union
 from langchain.schema import AgentAction, AgentFinish, HumanMessage
 import re
@@ -75,7 +75,12 @@ class Agent:
         tool_names = [tool.name for tool in tools]
         prompt_template = self._setup_prompt_template(character, tools=tools)
         output_parser = CustomOutputParser()
-        llm = AzureChatOpenAI(temperature=0, deployment_name=os.environ.get('OPENAI_DEPLOYMENT_NAME'))
+        if os.environ.get('OPENAI_API_TYPE') == 'openai':
+            llm = ChatOpenAI(temperature=0)
+        elif os.environ.get('OPENAI_API_TYPE') == 'azure':
+            llm = AzureChatOpenAI(temperature=0, deployment_name=os.environ.get('OPENAI_DEPLOYMENT_NAME'))
+        else:
+            raise KeyError("No OPENAI_API_TYPE environment variable set or invalid value")
         llm_chain = LLMChain(llm=llm, prompt=prompt_template)
         agent = LLMSingleActionAgent(
             llm_chain=llm_chain, 
