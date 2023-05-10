@@ -49,7 +49,7 @@ class TTS:
         self.engine.say(text)
         self.engine.runAndWait()
         
-class Speech:
+class Talk:
     def __init__(self):
         self._ending = False
         if os.environ.get('ELEVENLABS_API_KEY'):
@@ -68,20 +68,24 @@ class Speech:
     def talk(self):
         " This runs in a separate thread and says words when there's enough to say "
         words_to_say = []
+        print("Talk thread started")
         while True:
             try:
-                text = self._incomingQueue.get(block=True, timeout=TIMEOUT)
+                (callback_start, text, callback_stop) = self._incomingQueue.get(block=True, timeout=TIMEOUT)
             except queue.Empty:
                 if self._ending:
+                    print("Stopping talking")
                     self.engine.say("Shutting down")
                     return
                 if words_to_say:  # Assume that any longer delay is a sign of completion
+                    callback_start()
                     self.engine.say(''.join(words_to_say))
                     words_to_say = []
+                    callback_stop()
                 continue
             else:
                 words_to_say.append(text)
                 
-    def say(self, text: str):
+    def say(self, callback_start: callable, text: str, callback_stop: callable):
         " This puts incoming words on the queue, runs in the main thread "
-        self._incomingQueue.put(text)
+        self._incomingQueue.put((callback_start, text, callback_stop))

@@ -3,9 +3,12 @@ from tkinter import ttk
 import json
 from websockets.sync.client import connect
 from websockets.exceptions import ConnectionClosed, ConnectionClosedError
-import speech_recognition as sr
-from speech import Speech
+from talk import Talk
+from listen import Listen
+import openai
 import threading
+import os
+import time
 
 STOP_STR = "###STOP###"
 
@@ -19,7 +22,8 @@ class Application(tk.Frame):
         self.websocket = None
         self.pack()
         self.create_widgets()
-        self.speech = Speech()
+        self.talk = Talk() # Setup the talking thread
+        self.listen = Listen(self.add_to_message_text) # Setup the listening thread
 
     def create_widgets(self):
         # Host to connect to
@@ -50,6 +54,8 @@ class Application(tk.Frame):
         message_frame = tk.LabelFrame(self.master, text="Message:")
         self.message_entry = tk.Text(message_frame, height=5, state=tk.DISABLED)
         self.message_entry.pack(side="left", padx=5, pady=5)
+        self.clear_button = tk.Button(message_frame, text="Clear", command=self.clear_message)
+        self.clear_button.pack(side="left", padx=5, pady=5)
         self.send_button = tk.Button(message_frame, text="Send", command=self.send, state=tk.DISABLED)
         self.send_button.pack(side="right", padx=5, pady=5)
         message_frame.pack(fill=tk.X)
@@ -61,14 +67,12 @@ class Application(tk.Frame):
 
     def start_listening(self):
         self.listen_button.configure(state=tk.DISABLED)
-        self.listening = True
+        self.listen.start_listening()
         self.stop_listening_button.configure(state=tk.NORMAL)
-        thread = threading.Thread(target=self.listen_for_speech)
-        thread.start()
         
     def stop_listening(self):
         self.stop_listening_button.configure(state=tk.DISABLED)
-        self.listening = False
+        self.listen.stop_listening()
         self.listen_button.configure(state=tk.NORMAL)
         
     def closed_connection(self):
@@ -76,9 +80,12 @@ class Application(tk.Frame):
         if self.websocket:
             self.websocket.close()
             self.websocket = None
-        self.connect_button.configure(state=tk.NORMAL)
-        self.send_button.configure(state=tk.DISABLED)
-        self.message_entry.configure(state=tk.DISABLED)
+        try:
+            self.connect_button.configure(state=tk.NORMAL)
+            self.send_button.configure(state=tk.DISABLED)
+            self.message_entry.configure(state=tk.DISABLED)
+        except:
+            pass
     
     def connect(self):
         host = self.hostname_entry.get()
@@ -92,14 +99,19 @@ class Application(tk.Frame):
             self.message_entry.configure(state=tk.NORMAL)
             thread = threading.Thread(target=self.receive_messages)
             thread.start()
+            self.start_listening()
         except Exception as e:
             print(f"Failed to connect to {uri}: {e}")
             self.closed_connection()
 
     def send(self):
         message = self.message_entry.get(1.0, "end-1c").encode()
+        message = message.decode('utf-8')
+        if not message:
+            print("Nothing to send, not sending")
+            return
         try:
-            self.websocket.send(json.dumps({'prompt':message.decode('utf-8'), 'type':'prompt'}))
+            self.websocket.send(json.dumps({'prompt':message, 'type':'prompt'}))
         except ConnectionClosedError:
             self.closed_connection()
             return
@@ -107,53 +119,43 @@ class Application(tk.Frame):
         self.response_text.delete(1.0, tk.END)
         self.response_text.configure(state=tk.DISABLED)
         
-    def add_to_response_text(self, message):
+    def add_to_response_text(self, message) -> None:
+        " Called to add text to the response box when it comes back from the AI (in the main thread) "
         self.response_text.configure(state=tk.NORMAL)
         self.response_text.insert(tk.END, message)
         self.response_text.configure(state=tk.DISABLED)
         
+    def add_to_message_text(self, text: str) -> None:
+        " Called to add text to the request box when it's translated from audio (in the listen thread) "
+        self.message_entry.after(1, self.message_entry.delete, 1.0, tk.END)
+        self.message_entry.after(2, self.message_entry.insert, tk.END, text)
+        self.message_entry.after(5, self.send)
+        
+    def clear_message(self):
+        " Only ever called in the main loop as a response to a button press "
+        self.message_entry.delete(1.0, tk.END)
+        
     def receive_messages(self):
+        " Websocket receipt loop "
         while True:
             try:
                 for message in self.websocket:
-                    #print(f"Received: {message}")
                     try:
                         payload = json.loads(message)['payload']
                     except:
                         print("Garbled message, ignoring...")
-                    self.response_text.after(10, self.add_to_response_text, payload)
-                    self.speech.say(payload)
+                    self.response_text.after(1, self.add_to_response_text, payload)
+                    self.talk.say(self.stop_listening, payload, self.start_listening) # Stop listening, say the response, then start listening again
             except ConnectionClosed:
                 return
             except TypeError: # NoneType is not iterable
                 return
 
-    def listen_for_speech(self):
-        if not self.listening:
-            print("Not Listening")
-            return
-        r = sr.Recognizer()
-        with sr.Microphone() as source:
-            while self.listening:
-                print("Listening...")
-                try:
-                    audio = r.listen(source, timeout=5)
-                except sr.WaitTimeoutError:
-                    continue
-                try:
-                    print("Googleverting")
-                    text = r.recognize_google(audio, key=os.environ.get('GOOGLE_API_KEY'))
-                    text = str(text)
-                    print(f"Recognized: {text}")
-                    self.message_entry.after(10, self.message_entry.insert, tk.END, text)
-                except sr.UnknownValueError:
-                    print("Could not understand audio")
-                except sr.RequestError as e:
-                    print("Could not request results from Google Speech Recognition service; {0}".format(e))
-            print("Stopped Listening")
-
     def quit(self):
-        self.speech.quit()
+        print("Quitting")
+        self._ending = True
+        self.listen.quit()
+        self.talk.quit()
         self.closed_connection()
         self.master.destroy()
 
@@ -161,5 +163,5 @@ root = tk.Tk()
 app = Application(root)
 try:
     app.mainloop()
-except KeyboardInterrupt:
+except:
     app.quit()
