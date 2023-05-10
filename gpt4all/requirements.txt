@@ -9,3 +9,4 @@ accelerate
 langchain
 openai
 google-api-python-client
+wolframalpha

@@ -1,0 +1,9 @@
+websockets
+loguru
+nest_asyncio
+huggingface_hub
+python-dotenv
+langchain
+openai
+google-api-python-client
+wolframalpha

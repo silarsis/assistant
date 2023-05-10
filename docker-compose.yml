@@ -1,20 +1,31 @@
 version: '3.5'
 services:
-  gpt4all: # The core python gpt4all model
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    build: ./gpt4all
-    container_name: gpt4all
+  agent: # The new agent, no actual llm required
+    build: ./agent
+    container_name: agent
     ports:
       - "8765:8765"
       - "8000:8000"
-    volumes:
-      - ./volumes/gpt4all:/models
+    environment:
+      - INSECURE
+
+  # gpt4all: # The core python gpt4all model
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+  #   build: ./gpt4all
+  #   container_name: gpt4all
+  #   ports:
+  #     - "8765:8765"
+  #     - "8000:8000"
+  #   volumes:
+  #     - ./volumes/gpt4all:/models
+  #   environment:
+  #     - INSECURE
 
   webui: # The (currently web) interface for the assistant
     build: ./webui
