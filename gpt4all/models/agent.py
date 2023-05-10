@@ -6,6 +6,10 @@ from langchain.utilities.wolfram_alpha import WolframAlphaAPIWrapper
 from langchain.chat_models import AzureChatOpenAI
 from typing import List, Union
 from langchain.schema import AgentAction, AgentFinish, HumanMessage
+from langchain.vectorstores import FAISS
+from langchain.docstore import InMemoryDocstore
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.memory.chat_memory import BaseChatMemory, get_prompt_input_key
 import re
 import os
 
@@ -125,6 +129,16 @@ Question: {input}
             template=template_str,
             tools=tools)
 
+    def _setup_memory(self):
+        # Define your embedding model
+        embeddings_model = OpenAIEmbeddings()
+        # Initialize the vectorstore as empty
+        import faiss
+
+        embedding_size = 1536
+        index = faiss.IndexFlatL2(embedding_size)
+        self.memory = FAISS(embeddings_model.embed_query, index, InMemoryDocstore({}), {})
+
     async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None]) -> None:
         try:
             callback(self.agent_executor.run(prompt)) # TODO: Find a better way to do this
@@ -132,4 +146,29 @@ Question: {input}
             callback("Connection reset by peer")
         
     def prompt(self, prompt: str) -> str:
+        # Here, we want to collect the output and then think about whether to feed it
+        # back into itself or not.
         return self.agent_executor.run(prompt)
+    
+class AgentMemory(BaseChatMemory):
+    retriever: VectorStoreRetriever = Field(exclude=True)
+    """VectorStoreRetriever object to connect to."""
+
+    @property
+    def memory_variables(self) -> List[str]:
+        return ["chat_history", "relevant_context"]
+
+    def _get_prompt_input_key(self, inputs: Dict[str, Any]) -> str:
+        """Get the input key for the prompt."""
+        if self.input_key is None:
+            return get_prompt_input_key(inputs, self.memory_variables)
+        return self.input_key
+
+    def load_memory_variables(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        input_key = self._get_prompt_input_key(inputs)
+        query = inputs[input_key]
+        docs = self.retriever.get_relevant_documents(query)
+        return {
+            "chat_history": self.chat_memory.messages[-10:],
+            "relevant_context": docs,
+        }
