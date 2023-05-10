@@ -130,6 +130,7 @@ class Application(tk.Frame):
 
     def listen_for_speech(self):
         if not self.listening:
+            print("Not Listening")
             return
         r = sr.Recognizer()
         with sr.Microphone() as source:
@@ -140,7 +141,8 @@ class Application(tk.Frame):
                 except sr.WaitTimeoutError:
                     continue
                 try:
-                    text = r.recognize_google(audio)
+                    print("Googleverting")
+                    text = r.recognize_google(audio, key=os.environ.get('GOOGLE_API_KEY'))
                     text = str(text)
                     print(f"Recognized: {text}")
                     self.message_entry.after(10, self.message_entry.insert, tk.END, text)
@@ -148,6 +150,7 @@ class Application(tk.Frame):
                     print("Could not understand audio")
                 except sr.RequestError as e:
                     print("Could not request results from Google Speech Recognition service; {0}".format(e))
+            print("Stopped Listening")
 
     def quit(self):
         self.speech.quit()
