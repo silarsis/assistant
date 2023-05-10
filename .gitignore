@@ -1,4 +1,4 @@
 volumes/*
 */.env
 .env
-client/__pycache__/speech.cpython-310.pyc
+**/*.pyc
