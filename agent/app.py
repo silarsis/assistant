@@ -13,7 +13,7 @@ load_dotenv()
 nest_asyncio.apply()
 
 if os.getenv('INSECURE'):
-    print("Disabling SSL checks", flush=True)
+    print("Disabling SSL checks")
     ssl.SSLContext.verify_mode = property(lambda self: ssl.CERT_NONE, lambda self, newval: None)
 
 class API:
@@ -25,7 +25,7 @@ class API:
     ws_loop = asyncio.new_event_loop()
     
     def __init__(self):
-        print("Launching bot...", flush=True)
+        print("Launching bot...")
         self.bot = Parser()
             
     async def text_send_coroutine(self, payload: str, writer):
@@ -33,7 +33,7 @@ class API:
         await writer.drain()
         
     async def handle_text_connection(self, reader, writer):
-        print("Text connection", flush=True)
+        print("Text connection")
         while True:
             prompt = await reader.readline()
             if not prompt:
@@ -48,14 +48,14 @@ class API:
         await websocket.send(json.dumps(response))
 
     async def handle_ws_connection(self, websocket):
-        print("WS connection", flush=True)
+        print("WS connection")
         try:
             async for message in websocket:
-                print("Received message " + str(message), flush=True)
+                print("Received message " + str(message))
                 try:
                     m=json.loads(message)
                 except json.JSONDecodeError as e:
-                    print(str(e), flush=True)
+                    print(str(e))
                     continue
                 if (m.get("type") == 'prompt'):
                     correlation_id=f'{uuid.uuid4()}'
@@ -73,20 +73,20 @@ class API:
                     if (m.get("command") == 'update_prompt_template'):
                         self.bot.update_prompt_template(m.get("prompt"))
         except ConnectionClosedError:
-            print("WS connection broken", flush=True)
+            print("WS connection broken")
             await websocket.close()
 
     async def main(self):
-        print("Launching WS server", flush=True)
+        print("Launching WS server")
         ws_server = await serve(self.handle_ws_connection, self.web_host, self.web_port)
-        print(f"WS started on port {self.web_port}", flush=True)
+        print(f"WS started on port {self.web_port}")
         
-        print("Launching text server", flush=True)
+        print("Launching text server")
         text_server = await asyncio.start_server(
             self.handle_text_connection, 
             self.text_host, 
             self.text_port)
-        print(f'Text started on port {self.text_port}', flush=True)
+        print(f'Text started on port {self.text_port}')
         
         async with ws_server, text_server:
             await asyncio.gather(text_server.serve_forever(), ws_server.serve_forever())
