@@ -61,7 +61,7 @@ class Application(tk.Frame):
         message_frame.pack(fill=tk.X)
 
         response_frame = tk.LabelFrame(self.master, text="Response:")
-        self.response_text = tk.Text(response_frame, height=20, state=tk.DISABLED)
+        self.response_text = tk.Text(response_frame, height=20, wrap=tk.WORD, state=tk.DISABLED)
         self.response_text.pack(side="bottom", fill=tk.BOTH, expand=True)
         response_frame.pack(fill=tk.BOTH)
 
@@ -112,7 +112,7 @@ class Application(tk.Frame):
             return
         try:
             self.websocket.send(json.dumps({'prompt':message, 'type':'prompt'}))
-        except ConnectionClosedError:
+        except (ConnectionClosedError, AttributeError):
             self.closed_connection()
             return
         self.response_text.configure(state=tk.NORMAL)
