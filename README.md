@@ -10,7 +10,10 @@ It _should_ just work out of the box. However, the default agent setup is now po
 keys for that, as well as for whatever tools are setup in the tools list.
 
 If you have API keys for various things, you can look at the .env-template files - rename them to .env and add
-keys or configurations as needed. You can find them in each of the sub-directories from the main dir.
+keys or configurations as needed. You can find them in each of the sub-directories from the main dir. The critical one
+is the one in `agent/`
+
+To run the client, cd into the client/ directory and run `pip install -r requirements.txt` followed by `python ./client.py`
 
 ## Goals
 
