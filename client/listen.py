@@ -1,8 +1,10 @@
 import os
 import threading
 import time
+import json
 from dotenv import load_dotenv
 import speech_recognition as sr
+from deepgram import Deepgram
 
 load_dotenv()
 
@@ -20,7 +22,7 @@ class Listen:
     def quit(self):
         " Set a flag to stop the talk thread and wait for the timeout - runs in main thread "
         self._ending = True
-        time.sleep(TIMEOUT)
+        #time.sleep(TIMEOUT)
         
     def start_listening(self):
         print("Start listening")
@@ -53,8 +55,15 @@ class Listen:
                 if not audio:
                     continue
                 try:
-                    print("Whispering")
-                    text = r.recognize_whisper_api(audio, api_key=os.environ.get('OPENAI_API_KEY'))
+                    print("Speech-to-textifying")
+                    if os.environ.get('DEEPGRAM_API_KEY'):
+                        deepgram = Deepgram(os.environ.get('DEEPGRAM_API_KEY'))
+                        audio_data = {'buffer': audio.get_wav_data(), 'mimetype': 'audio/wav'}
+                        response = deepgram.transcription.sync_prerecorded(audio_data, {'punctuate': True})
+                        print(response)
+                        text = response['results']['channels'][0]['alternatives'][0]['transcript']
+                    elif os.environ.get('OPENAI_API_KEY'):
+                        text = r.recognize_whisper_api(audio, api_key=os.environ.get('OPENAI_API_KEY'))
                     text = str(text)
                     print(f"Recognized: {text}")
                     self.callback(text)

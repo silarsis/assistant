@@ -63,7 +63,7 @@ class Talk:
     def quit(self):
         " Set a flag to stop the talk thread and wait for the timeout - runs in main thread "
         self._ending = True
-        time.sleep(TIMEOUT)
+        #time.sleep(TIMEOUT)
             
     def talk(self):
         " This runs in a separate thread and says words when there's enough to say "
