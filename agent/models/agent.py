@@ -41,22 +41,18 @@ class CustomPromptTemplate(BaseChatPromptTemplate):
 class CustomOutputParser(AgentOutputParser):
     def parse(self, llm_output: str) -> Union[AgentAction, AgentFinish]:
         # Check if agent should finish
-        print(llm_output, flush=True)
-        if "Final Answer:" in llm_output:
-            return AgentFinish(
-                # Return values is generally always a dictionary with a single `output` key
-                # It is not recommended to try anything else at the moment :)
-                return_values={"output": llm_output.split("Final Answer:")[-1].strip()},
-                log=llm_output)
+        final_answer = re.search(r"Final Answer:(.*?)(?:\nQuestion:|$)", llm_output, re.DOTALL)
+        if final_answer:
+            answer = final_answer.group(1).strip()
+            return AgentFinish(return_values={"output": answer}, log=llm_output)
         # Parse out the action and action input
         regex = r"Action\s*\d*\s*:(.*?)\nAction\s*\d*\s*Input\s*\d*\s*:[\s]*(.*)"
         match = re.search(regex, llm_output, re.DOTALL)
         if not match:
-            #raise ValueError(f"Could not parse LLM output: `{llm_output}`")
-            print(f"Could not parse LLM output: `{llm_output}`")
-            action = re.search(r"Action\s*\d*\s*:(.*?)\n", llm_output, re.DOTALL)
+            print(f"Could not parse LLM output")
+            action = re.search(r"Action\s*\d*\s*:(.*?)$", llm_output, re.DOTALL)
             if not match:
-                print(f"Couldn't even find an action, giving up")
+                print(f"Couldn't even find an action, giving up.")
                 return AgentFinish(
                     return_values={"output": llm_output},
                     log=llm_output)
@@ -99,7 +95,7 @@ class Agent:
         wolfram = WolframAlphaAPIWrapper()
         tools = [
             Tool(name = "Search", func=search.run, description="useful for when you need to answer questions about current events"),
-            Tool(name="Wolfram", func=wolfram.run, description="useful for when you need to answer factual questions about math, science, society or culture")
+            Tool(name="Wolfram", func=wolfram.run, description="useful for when you need to answer factual questions about math, science, society, the time or culture")
         ]
         return tools
         
@@ -120,7 +116,7 @@ Observation: the result of the action
 Thought: I now know the final answer
 Final Answer: the final answer to the original input question, required if the Action is "None"
 
-If you have no action, use your thoughts and observations to generate a Final Answer
+If the Action is None, there _must_ be a Final Answer.
 
 Question: {input}
 {agent_scratchpad}
