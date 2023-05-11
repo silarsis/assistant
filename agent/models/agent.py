@@ -1,5 +1,6 @@
-from langchain.agents import Tool, AgentExecutor, LLMSingleActionAgent, AgentOutputParser
+from langchain.agents import Tool, AgentExecutor, LLMSingleActionAgent, AgentOutputParser, ZeroShotAgent
 from langchain.prompts import BaseChatPromptTemplate
+from langchain.memory import ConversationBufferWindowMemory
 from langchain import LLMChain
 from langchain.utilities import GoogleSearchAPIWrapper
 from langchain.utilities.wolfram_alpha import WolframAlphaAPIWrapper
@@ -12,6 +13,7 @@ import os
 from typing import Callable
 from .generic import ModelClass
 
+TEMPERATURE = 0.2
 
 # Set up a prompt template
 class CustomPromptTemplate(BaseChatPromptTemplate):
@@ -70,11 +72,12 @@ class Agent:
         tools = self._setup_tools()
         tool_names = [tool.name for tool in tools]
         prompt_template = self._setup_prompt_template(character, tools=tools)
+        memory = ConversationBufferWindowMemory(memory_key="chat_history", k=20)
         output_parser = CustomOutputParser()
         if os.environ.get('OPENAI_API_TYPE') == 'openai':
-            llm = ChatOpenAI(temperature=0)
+            llm = ChatOpenAI(temperature=TEMPERATURE)
         elif os.environ.get('OPENAI_API_TYPE') == 'azure':
-            llm = AzureChatOpenAI(temperature=0, deployment_name=os.environ.get('OPENAI_DEPLOYMENT_NAME'))
+            llm = AzureChatOpenAI(temperature=TEMPERATURE, deployment_name=os.environ.get('OPENAI_DEPLOYMENT_NAME'))
         else:
             raise KeyError("No OPENAI_API_TYPE environment variable set or invalid value")
         llm_chain = LLMChain(llm=llm, prompt=prompt_template)
@@ -87,7 +90,8 @@ class Agent:
         self.agent_executor = AgentExecutor.from_agent_and_tools(
             agent=agent,
             tools=tools, 
-            verbose=True)
+            verbose=True,
+            memory=memory)
         
     def _setup_tools(self) -> List[Tool]:
         # Define which tools the agent can use to answer user queries
@@ -118,11 +122,12 @@ Final Answer: the final answer to the original input question, required if the A
 
 If the Action is None, there _must_ be a Final Answer.
 
+{chat_history}
 Question: {input}
 {agent_scratchpad}
 """
         return CustomPromptTemplate(
-            input_variables=["input", "intermediate_steps"], 
+            input_variables=["input", "intermediate_steps", "chat_history"], 
             template=template_str,
             tools=tools)
 

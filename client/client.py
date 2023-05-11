@@ -145,7 +145,10 @@ class Application(tk.Frame):
                     except:
                         print("Garbled message, ignoring...")
                     self.response_text.after(1, self.add_to_response_text, payload)
-                    self.talk.say(self.stop_listening, payload, self.start_listening) # Stop listening, say the response, then start listening again
+                    if self.listen.listening:
+                        self.talk.say(self.stop_listening, payload, self.start_listening) # Stop listening, say the response, then start listening again
+                    else:
+                        self.talk.say(lambda: None, payload, lambda: None) # Don't stop listening, just say the response
             except ConnectionClosed:
                 return
             except TypeError: # NoneType is not iterable
