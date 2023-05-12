@@ -1,2 +1,1 @@
-[tool.ruff]
-line_length = 100
+line-length = 100

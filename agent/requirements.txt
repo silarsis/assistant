@@ -7,3 +7,5 @@ langchain
 openai
 google-api-python-client
 wolframalpha
+transformers[agents]
+bs4

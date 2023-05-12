@@ -4,7 +4,6 @@ import requests
 from playsound import playsound, PlaysoundException
 import queue
 import threading
-import time
 from dotenv import load_dotenv
 
 load_dotenv()
