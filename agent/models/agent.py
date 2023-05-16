@@ -137,13 +137,13 @@ class Agent:
         search = GoogleSearchAPIWrapper()
         wolfram = WolframAlphaAPIWrapper()
         transformers = TransformerToolAgent()
-        coder = CodeAgent()
-        codeExplainer = CodeExplainerAgent()
+        # coder = CodeAgent()
+        # codeExplainer = CodeExplainerAgent()
         tools = [
             Tool(name = "Search", func=search.run, description="useful for when you need to answer questions about current events"),
             Tool(name="Wolfram", func=wolfram.run, description="useful for when you need to answer factual questions about math, science, society, the time or culture"),
-            Tool(name="Code", func=coder.run, description="useful for when you need to complete some code"),
-            Tool(name="CodeExplainer", func=codeExplainer.run, description="useful for when you need to explain some code"),
+            #Tool(name="Code", func=coder.run, description="useful for when you need to complete some code"),
+            #Tool(name="CodeExplainer", func=codeExplainer.run, description="useful for when you need to explain some code"),
             Tool(name="Transformers", func=transformers.run, description="useful for when you don't know how else to answer")
         ]
         return tools
