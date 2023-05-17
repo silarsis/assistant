@@ -11,6 +11,7 @@ from langchain.llms import AzureOpenAI, OpenAI
 from typing import List, Union, Any
 from langchain.schema import AgentAction, AgentFinish, HumanMessage, SystemMessage
 from transformers import OpenAiAgent, HfAgent
+import websocket
 import re
 import os
 
@@ -19,6 +20,16 @@ from typing import Callable
 TEMPERATURE = 0.2
 
 
+class SmallBrain:
+    def __init__(self):
+        # Create a ws connection to the small brain
+        self.ws = websocket.WebSocket()
+        self.ws.connect('ws://gpt4all:8766')
+        
+    def run(self, query: str) -> str:
+        " Useful tool for answering all questions "
+        pass
+        
 class CodeAgent:
     def __init__(self):
         self._agent = HfAgent("https://api-inference.huggingface.co/models/bigcode/starcoder")

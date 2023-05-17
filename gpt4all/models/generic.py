@@ -9,11 +9,6 @@ class ModelClass(abc.ABC):
         pass
     
     @abc.abstractmethod
-    def update_prompt_template(self, new_template: str):
-        # Update the prompt template
-        pass
-    
-    @abc.abstractmethod
     async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None]):
         # Write a prompt to the bot and callback with the response.
         pass
