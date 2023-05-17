@@ -9,11 +9,12 @@ import Col from 'react-bootstrap/Col';
 import Card from 'react-bootstrap/Card';
 import ButtonGroup from 'react-bootstrap/ButtonGroup';
 
-// const apiHost = process.env.GPT4ALL_HOST
-const socketUrl = 'ws://127.0.0.1:8765';
-
 function App() {
   const [response, setState] = useState({});
+
+  const currentHost = window.location.host;
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const socketUrl = `${protocol}//${currentHost}/`;
 
   const {
     sendJsonMessage,
