@@ -91,8 +91,8 @@ class Guide:
         print("Initialising Guide")
         self.memory = Memory(session_id="static")
         self.tools = self._setup_tools()
-        self.guide = guidance.llms.transformers.Vicuna(load_vicuna())
-        #self.guide = guidance.llms.OpenAI('text-davinci-003')
+        # self.guide = guidance.llms.transformers.Vicuna(load_vicuna())
+        self.guide = guidance.llms.OpenAI('text-davinci-003')
         self._prompt_template = self._setup_prompt_template(character)
         print("Guide initialised")
         
