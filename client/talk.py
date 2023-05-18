@@ -5,6 +5,7 @@ from playsound import playsound, PlaysoundException
 import queue
 import threading
 from dotenv import load_dotenv
+import elevenlabs
 
 load_dotenv()
 
@@ -12,6 +13,7 @@ TIMEOUT = 2
 
 class ElevenLabs:
     def __init__(self):
+        elevenlabs.set_api_key(os.environ.get('ELEVENLABS_API_KEY'))
         self._headers = {
             'Content-Type': 'application/json',
             'xi-api-key': os.environ.get('ELEVENLABS_API_KEY')
@@ -20,6 +22,8 @@ class ElevenLabs:
         
     def say(self, text: str):
         print("Requesting TTS", flush=True)
+        # audio_stream = elevenlabs.generate(text=f'... ... ... {text}', voice=self._voices[0], stream=True)
+        # elevenlabs.play(audio_stream)
         voice_index = 0
         tts_url = (
             f"https://api.elevenlabs.io/v1/text-to-speech/{self._voices[voice_index]}"
