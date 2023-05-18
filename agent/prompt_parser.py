@@ -1,11 +1,12 @@
 from typing import Callable
-from models.agent import Agent
+# from models.agent import Agent
+from models.guide import Guide
 
 
 class Parser:
     def __init__(self):
         with open('./character.txt', 'r') as char_file:
-            self.agent = Agent(character=char_file.read())
+            self.agent = Guide(character=char_file.read())
     
     async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None]):
         print(f"Prompting with {prompt}", flush=True)
