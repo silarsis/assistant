@@ -4,25 +4,27 @@ services:
     build: ./agent
     container_name: agent
     ports:
-      - "8765:8765"
+      - "10000:10000"
       - "8000:8000"
     environment:
       - INSECURE
-
-  gpt4all: # A local model, to run cheaper if you have the hardware
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    build: ./gpt4all
-    container_name: gpt4all
-    ports:
-      - "8766:8766"
     volumes:
       - ./volumes/gpt4all:/models
+
+  # gpt4all: # A local model, to run cheaper if you have the hardware
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+  #   build: ./gpt4all
+  #   container_name: gpt4all
+  #   ports:
+  #     - "8766:8766"
+  #   volumes:
+  #     - ./volumes/gpt4all:/models
 
   webui: # The (currently web) interface for the assistant
     build: ./webui
