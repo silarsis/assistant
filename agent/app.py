@@ -19,7 +19,7 @@ if os.getenv('INSECURE'):
 
 class API:
     web_host = '0.0.0.0'
-    web_port = 8765
+    web_port = 10000
     text_host = '0.0.0.0'
     text_port = 8000
     text_loop = asyncio.new_event_loop()
@@ -59,6 +59,7 @@ class API:
                     print(str(e))
                     continue
                 # Check if prompt from web or message from whatsapp
+                # {'type': 'prompt', 'prompt': 'prompt text', 'hear_thoughts': True}
                 if (m.get("type") == 'prompt'):
                     correlation_id=f'{uuid.uuid4()}'
                     def callback(x):
@@ -69,7 +70,7 @@ class API:
                                 x, 
                                 'response', 
                                 correlation_id))
-                    await self.bot.prompt_with_callback(m["prompt"], callback=callback)
+                    await self.bot.prompt_with_callback(m["prompt"], callback=callback, hear_thoughts=m.get('hear_thoughts', False))
                 # {'type': 'system', 'command': 'update_prompt_template', 'prompt': 'new prompt'}
                 if (m.get("type") == 'system'):
                     if (m.get("command") == 'update_prompt_template'):

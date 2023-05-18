@@ -5,12 +5,7 @@ from websockets.sync.client import connect
 from websockets.exceptions import ConnectionClosed, ConnectionClosedError
 from talk import Talk
 from listen import Listen
-import openai
 import threading
-import os
-import time
-
-STOP_STR = "###STOP###"
 
 
 class Application(tk.Frame):
@@ -20,6 +15,8 @@ class Application(tk.Frame):
         self.master = master
         self.master.title("Echo Client")
         self.websocket = None
+        self.hear_thoughts = False
+        self.session_id = 'client'
         self.pack()
         self.create_widgets()
         self.talk = Talk() # Setup the talking thread
@@ -27,31 +24,48 @@ class Application(tk.Frame):
 
     def create_widgets(self):
         # Host to connect to
+        host_frame = tk.LabelFrame(self.master, text="Host")
         self.connected = False
-        self.hostname_label = tk.Label(self, text="Hostname:")
-        self.hostname_label.pack()
-        self.hostname_entry = tk.Entry(self)
+        self.hostname_label = tk.Label(host_frame, text="Hostname:")
+        self.hostname_label.pack(side="left", padx=5, pady=5)
+        self.hostname_entry = tk.Entry(host_frame)
         self.hostname_entry.insert(0, "localhost")
-        self.hostname_entry.pack()
-        self.port_label = tk.Label(self, text="Port:")
-        self.port_label.pack()
-        self.port_entry = tk.Entry(self)
-        self.port_entry.insert(0, "8765")
-        self.port_entry.pack()
-        self.connect_button = tk.Button(self, text="Connect", command=self.connect)
-        self.connect_button.pack()
+        self.hostname_entry.pack(side="left", padx=5, pady=5)
+        self.port_label = tk.Label(host_frame, text="Port:")
+        self.port_label.pack(side="left", padx=5, pady=5)
+        self.port_entry = tk.Entry(host_frame)
+        self.port_entry.insert(0, "10000")
+        self.port_entry.pack(side="left", padx=5, pady=5)
+        self.connect_button = tk.Button(host_frame, text="Connect", command=self.connect)
+        self.connect_button.pack(side="left", padx=5, pady=5)
+        host_frame.pack(fill=tk.X)
         
+        # Other controls
+        control_frame = tk.LabelFrame(self.master, text="Controls")
         # Listening toggle
+        listen_frame = tk.Frame(control_frame)
         self.listening = False
-        self.listen_button = tk.Button(self.master, text="Start Listening", command=self.start_listening)
-        self.listen_button.pack()
-        self.stop_listening_button = tk.Button(self.master, text="Stop Listening", command=self.stop_listening, state=tk.DISABLED)
-        self.stop_listening_button.pack()
+        self.listen_button = tk.Button(listen_frame, text="Start Listening", command=self.start_listening)
+        self.listen_button.pack(padx=5, pady=5)
+        self.stop_listening_button = tk.Button(listen_frame, text="Stop Listening", command=self.stop_listening, state=tk.DISABLED)
+        self.stop_listening_button.pack(padx=5, pady=5)
+        listen_frame.pack(fill=tk.Y, side="left", padx=5, pady=5)
+        # Variables to control the response
+        var_frame = tk.Frame(control_frame)
+        self.hear_thoughts_button = tk.Button(var_frame, text="Hear Thoughts", command=self.toggle_hear_thoughts)
+        self.hear_thoughts_button.pack(side="left", padx=5, pady=5)
+        self.session_id_label = tk.Label(var_frame, text="Session ID:")
+        self.session_id_entry = tk.Entry(var_frame)
+        self.session_id_entry.insert(0, self.session_id)
+        self.session_id_label.pack(side="left", padx=5, pady=5)
+        self.session_id_entry.pack(side="left", padx=5, pady=5)
+        var_frame.pack(fill=tk.Y, side="left", padx=5, pady=5)
+        # Quit button
+        self.quit_button = tk.Button(control_frame, text="Quit", command=self.quit)
+        self.quit_button.pack(side="right", padx=5, pady=5)
+        control_frame.pack(fill=tk.X)
 
-        self.quit_button = tk.Button(self.master, text="Quit", command=self.quit)
-        self.quit_button.pack()
-
-        message_frame = tk.LabelFrame(self.master, text="Message:")
+        message_frame = tk.LabelFrame(self.master, text="Message")
         self.message_entry = tk.Text(message_frame, height=5, state=tk.DISABLED)
         self.message_entry.pack(side="left", padx=5, pady=5)
         self.clear_button = tk.Button(message_frame, text="Clear", command=self.clear_message)
@@ -60,7 +74,7 @@ class Application(tk.Frame):
         self.send_button.pack(side="right", padx=5, pady=5)
         message_frame.pack(fill=tk.X)
 
-        response_frame = tk.LabelFrame(self.master, text="Response:")
+        response_frame = tk.LabelFrame(self.master, text="Response")
         self.response_text = tk.Text(response_frame, height=20, wrap=tk.WORD, state=tk.DISABLED)
         self.response_text.pack(side="bottom", fill=tk.BOTH, expand=True)
         response_frame.pack(fill=tk.BOTH)
@@ -74,6 +88,14 @@ class Application(tk.Frame):
         self.stop_listening_button.configure(state=tk.DISABLED)
         self.listen.stop_listening()
         self.listen_button.configure(state=tk.NORMAL)
+        
+    def toggle_hear_thoughts(self):
+        if self.hear_thoughts:
+            self.hear_thoughts_button.configure(text="Stop Hearing Thoughts")
+            self.hear_thoughts = False
+        else:
+            self.hear_thoughts_button.configure(text="Hear Thoughts")
+            self.hear_thoughts = True
         
     def closed_connection(self):
         print("Connection closed")
@@ -110,8 +132,15 @@ class Application(tk.Frame):
         if not message:
             print("Nothing to send, not sending")
             return
+        session_id = self.session_id_entry.get(1.0, "end-1c").encode()
+        session_id = session_id.decode('utf-8')
+        if not session_id:
+            session_id = 'client'
+        json_message = {'prompt':message, 'type':'prompt', 'session_id':session_id}
+        if self.hear_thoughts:
+            json_message['hear_thoughts'] = True
         try:
-            self.websocket.send(json.dumps({'prompt':message, 'type':'prompt'}))
+            self.websocket.send(json.dumps(json_message))
         except (ConnectionClosedError, AttributeError):
             self.closed_connection()
             return

@@ -12,9 +12,10 @@ import ButtonGroup from 'react-bootstrap/ButtonGroup';
 function App() {
   const [response, setState] = useState({});
 
-  const currentHost = window.location.host;
+  const currentHost = window.location.hostname;
+  const port = '10000';
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const socketUrl = `${protocol}//${currentHost}/`;
+  const socketUrl = `${protocol}//${currentHost}:${port}/`;
 
   const {
     sendJsonMessage,
