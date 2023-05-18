@@ -1,17 +1,16 @@
 from langchain.agents import Tool, LLMSingleActionAgent, AgentExecutor, AgentOutputParser
 from langchain.prompts import StringPromptTemplate
-from langchain.prompts.base import StringPromptValue, PromptValue
+from langchain.prompts.base import PromptValue
 from langchain.memory.motorhead_memory import MotorheadMemory
-from langchain.memory import ConversationBufferWindowMemory
 from langchain.callbacks.base import AsyncCallbackHandler
 from langchain import LLMChain
 from langchain.utilities import GoogleSearchAPIWrapper
 from langchain.utilities.wolfram_alpha import WolframAlphaAPIWrapper
 from langchain.llms import AzureOpenAI, OpenAI
 from typing import List, Union, Any
-from langchain.schema import AgentAction, AgentFinish, HumanMessage, SystemMessage
+from langchain.schema import AgentAction, AgentFinish
 from transformers import OpenAiAgent, HfAgent
-import websocket
+import websockets
 import re
 import os
 
@@ -23,7 +22,7 @@ TEMPERATURE = 0.2
 class SmallBrain:
     def __init__(self):
         # Create a ws connection to the small brain
-        self.ws = websocket.WebSocket()
+        self.ws = websockets.WebSocket()
         self.ws.connect('ws://gpt4all:8766')
         
     def run(self, query: str) -> str:
@@ -145,18 +144,16 @@ class Agent:
         
     def _setup_tools(self) -> List[Tool]:
         # Define which tools the agent can use to answer user queries
-        search = GoogleSearchAPIWrapper()
-        wolfram = WolframAlphaAPIWrapper()
-        transformers = TransformerToolAgent()
-        # coder = CodeAgent()
-        # codeExplainer = CodeExplainerAgent()
-        tools = [
-            Tool(name = "Search", func=search.run, description="useful for when you need to answer questions about current events"),
-            Tool(name="Wolfram", func=wolfram.run, description="useful for when you need to answer factual questions about math, science, society, the time or culture"),
-            #Tool(name="Code", func=coder.run, description="useful for when you need to complete some code"),
-            #Tool(name="CodeExplainer", func=codeExplainer.run, description="useful for when you need to explain some code"),
-            Tool(name="Transformers", func=transformers.run, description="useful for when you don't know how else to answer")
-        ]
+        tools = []
+        if os.environ.get('GOOGLE_API_KEY'):
+            search = GoogleSearchAPIWrapper()
+            tools.append(Tool(name="Search", func=search.run, description="useful for when you need to answer questions about current events"))
+        if os.environ.get('WOLFRAM_ALPHA_APPID'):
+            wolfram = WolframAlphaAPIWrapper()
+            tools.append(Tool(name="Wolfram", func=wolfram.run, description="useful for when you need to answer factual questions about math, science, society, the time or culture"))
+        if os.environ.get('OPENAI_API_KEY'):
+            transformers = TransformerToolAgent()
+            tools.append(Tool(name="Transformers", func=transformers.run, description="useful for when you don't know how else to answer"))
         return tools
         
     def _setup_prompt_template(self, character: str, tools: List[Tool]) -> CustomPromptTemplate:
