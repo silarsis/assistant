@@ -28,6 +28,38 @@ _openai.add_text_to_chat_mode = add_text_to_chat_mode
 TEMPERATURE = 0.2
 
 
+DEFAULT_PROMPT="""
+{{character}}
+
+Use the following format for your answers:
+
+Human: the input question you must answer
+Thought: you should always think about what to do, and check whether the answer is in the chat history or not
+Criticism: you should always criticise your own actions
+Action: the action to take, should be one of [{{tool_names}}]
+Action Input: the input to the action, or the answer if you are using the Answer tool
+
+Example:
+
+Human: what's the current price of ethereum?
+Thought: I need to check the price of ethereum, I can do that by using the Search tool
+Criticism: I should check the chat history first to see if I've already answered this question
+Action: Search
+Action Input: ethereum price
+
+Context:
+{{await 'context'}}
+
+Chat History:
+{{await 'history'}}
+
+Human: {{await 'query'}}
+Thought: {{gen 'thought'}}
+Criticism: {{gen 'criticism'}}
+Action: {{gen 'action'}}
+Action Input: {{gen 'action_input' stop='Human:'}}
+"""
+
 class Memory:
     url: str = "http://motorhead:8080"
     timeout = 3000
@@ -49,7 +81,7 @@ class Memory:
         messages = res_data.get("messages", [])
         messages.reverse()
         self.messages[session_id] = messages # Not strictly thread safe, but not too harmful
-        print(f"Memory refreshed, current context: {self.context[session_id]}, length: {len(self.messages[session_id])}")
+        # print(f"Memory refreshed, current context: {self.context[session_id]}, length: {len(self.messages[session_id])}")
 
     def add_message(self, role: str, content: str, session_id: str):
         requests.post(
@@ -69,9 +101,38 @@ class Memory:
             self.refresh_from(session_id)
         return [message["content"] for message in self.messages[session_id]]
     
+    def get_formatted_history(self, session_id) -> str:
+        history = self.get_history(session_id)
+        return "\n".join(history)
+    
     def get_context(self, session_id) -> str:
         self.refresh_from(session_id)
         return self.context[session_id]
+
+
+class PromptTemplate:
+    def __init__(self, default_character: str, default_prompt: str):
+        self.default_character = default_character
+        self.default_prompt = default_prompt
+        self._characters = {}
+        self._prompt_template_str = {}
+        self._prompt_templates = {}
+        
+    def get(self, session_id: str, llm) -> guidance.Program:
+        if session_id in self._prompt_templates:
+            return self._prompt_templates[session_id]
+        character = self._characters.setdefault(session_id, self.default_character)
+        template = self._prompt_template_str.setdefault(session_id, self.default_prompt)
+        self._prompt_templates[session_id] = guidance(template, llm=llm, character=character)
+        return self._prompt_templates[session_id]
+    
+    def set(self, session_id: str, prompt: str):
+        self._prompt_template_str[session_id] = prompt
+        self._prompt_templates.pop(session_id, None)
+        
+    def set_character(self, session_id: str, character: str):
+        self._characters[session_id] = character
+        self._prompt_templates.pop(session_id, None)
 
 
 def load_vicuna():
@@ -90,13 +151,14 @@ def load_vicuna():
     return filename
 
 class Guide:
-    def __init__(self, character: str):
+    def __init__(self, default_character: str):
         print("Initialising Guide")
         self.memory = Memory()
         self.tools = self._setup_tools()
         # self.guide = guidance.llms.transformers.Vicuna(load_vicuna())
         self.guide = guidance.llms.OpenAI('text-davinci-003')
-        self._prompt_template = self._setup_prompt_template(character)
+        self.default_character = default_character
+        self._prompt_templates = PromptTemplate(default_character, DEFAULT_PROMPT)
         print("Guide initialised")
         
     def _setup_tools(self) -> List[Tool]:
@@ -115,40 +177,23 @@ class Guide:
         print(f"Tools: {[tool.name for tool in tools]}")
         return tools
         
-    def _setup_prompt_template(self, character: str):
-        return guidance("""
-{{character}}
-
-Use the following format for your answers:
-
-Question: the input question you must answer
-Thought: you should always think about what to do, and check whether the answer is in the chat history or not
-Criticism: you should always criticise your own actions
-Action: the action to take, should be one of [{{tool_names}}]
-Action Input: the input to the action, or the answer if you are using the Answer tool
-
-History of chat so far:
-{{await 'history'}}
-End of History
-
-Question: {{await 'query'}}
-Thought: {{gen 'thought'}}
-Criticism: {{gen 'criticism'}}
-Action: {{gen 'action'}}
-Action Input: {{gen 'action_input' stop='Question:'}}
-""", llm=self.guide, character=character, tool_names=[tool.name for tool in self.tools])
-
-    async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], hear_thoughts: bool = False, session_id: str='static') -> None:
-        response = self.prompt(query=prompt, interim=callback, hear_thoughts=hear_thoughts, session_id=session_id)
+    def _get_prompt_template(self, session_id: str) -> str:
+        return self._prompt_templates.get(session_id, self.guide)(tool_names=[tool.name for tool in self.tools])
+        
+    async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], **kwargs) -> None:
+        response = self.prompt(query=prompt, interim=callback, hear_thoughts=kwargs.get('hear_thoughts', False), session_id=kwargs.get('session_id', 'static'))
         return callback(response)
     
-    def prompt(self, query: str, history: str="", interim: Optional[Callable[[str], None]]=None, hear_thoughts: bool = False, session_id: str='static') -> str:
+    def prompt(self, query: str, history: str="", interim: Optional[Callable[[str], None]]=None, **kwargs) -> str:
         print(f"Prompt: {query}")
+        session_id = kwargs.get('session_id', 'static')
+        hear_thoughts = kwargs.get('hear_thoughts', False)
         if not history:
-            history = self.memory.get_history(session_id=session_id)
-        print(f"History: {history}")
-        self.memory.add_message(role="Human", content=f'Question: {query}', session_id=session_id)
-        response = self._prompt_template(query=query, history=history)
+            history = self.memory.get_formatted_history(session_id=session_id)
+        # print(f"History: {history}")
+        history_context = self.memory.get_context(session_id=session_id)
+        self.memory.add_message(role="Human", content=f'Human: {query}', session_id=session_id)
+        response = self._get_prompt_template(session_id)(query=query, history=history, context=history_context)
         action = response['action'].strip()
         action_input = response['action_input'].strip()
         self.memory.add_message(role="AI", content=f"Action: {action}\nAction Input: {action_input}\n", session_id=session_id)
@@ -158,7 +203,7 @@ Action Input: {{gen 'action_input' stop='Question:'}}
             return action_input
         print(f"Looking for tool for action '{action}'")
         if interim and hear_thoughts:
-            interim(f"Thoughts: {response['thought']}\nAction: {action}\nAction Input: {action_input}\n")
+            interim(f"Thoughts: {response['thought']}.\nAction: {action}.\nAction Input: {action_input}.\n")
         tool = next((tool for tool in self.tools if tool.name.lower() == action.lower()), None)
         if tool:
             # Call the tool, include the output into the history and then recall the prompt
@@ -169,7 +214,10 @@ Action Input: {{gen 'action_input' stop='Question:'}}
                 print("  tool raised an exception")
                 tool_output = "This tool failed to run"
             self.memory.add_message(role="AI", content=f"Outcome: {tool_output}", session_id=session_id)
-            return self.prompt(query=query, history=f"{self.memory.get_context(session_id=session_id)}\nAction: {action}\nAction Input: {action_input}\nOutcome: {tool_output}\n")
+            return self.prompt(query=query)
         else:
             print(f"  No tool found for action '{action}'")
             return self.prompt(query=query, history=f"{self.memory.get_context(session_id=session_id)}\nAction: {action}\nAction Input: {action_input}\nOutcome: No tool found for action '{action}'\n")
+
+    async def update_prompt_template(self, prompt: str, callback: Callable[[str], None], **kwargs) -> None:
+        self._prompt_templates.set(kwargs.get('session_id', 'static'), prompt)

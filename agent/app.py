@@ -60,7 +60,17 @@ class API:
                     continue
                 # Check if prompt from web or message from whatsapp
                 # {'type': 'prompt', 'prompt': 'prompt text', 'hear_thoughts': True}
+                # {'type': 'system', 'command': 'update_prompt_template', 'prompt': 'new prompt'}
+                # {'type': 'system', 'command': 'update_character', 'prompt': 'new character'}
+                cmd = None
                 if (m.get("type") == 'prompt'):
+                    cmd = self.bot.prompt_with_callback
+                elif (m.get("type") == 'system'):
+                    if (m.get("command") == 'update_prompt_template'):
+                        cmd = self.bot.update_prompt_template
+                    if (m.get('command') == 'update_character'):
+                        cmd = self.bot.update_character
+                if cmd:
                     correlation_id=f'{uuid.uuid4()}'
                     def callback(x):
                         return self.ws_loop.run_until_complete(
@@ -70,15 +80,11 @@ class API:
                                 x, 
                                 'response', 
                                 correlation_id))
-                    await self.bot.prompt_with_callback(
+                    await cmd(
                         m["prompt"], 
                         callback=callback, 
                         hear_thoughts=m.get('hear_thoughts', False),
                         session_id=m.get('session_id', 'static'))
-                # {'type': 'system', 'command': 'update_prompt_template', 'prompt': 'new prompt'}
-                if (m.get("type") == 'system'):
-                    if (m.get("command") == 'update_prompt_template'):
-                        self.bot.update_prompt_template(m.get("prompt"))
         except ConnectionClosedError:
             print("WS connection broken")
             await websocket.close()
