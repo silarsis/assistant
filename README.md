@@ -31,7 +31,7 @@ Beyond the above, this repo is for experimentation and to help me understand thi
 
 ## Container List
 
-`gpt4all` is the core container in the mesh - it has a python interface and runs the planner model. This one is where
+`agent` is the nexus, runs the websocket and connections to the other models. This one is where
 most of the development will happen, and will be the entry point for cli-based use.
 
 `webui` provides a basic web interface, and sends messages to the gpt4all container

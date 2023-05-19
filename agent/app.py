@@ -1,4 +1,5 @@
 import asyncio
+import aiohttp
 import os
 import ssl
 from websockets.server import serve
@@ -13,19 +14,19 @@ load_dotenv()
 nest_asyncio.apply()
 
 if os.getenv('INSECURE'):
-    print("Disabling SSL checks", flush=True)
+    print("Disabling SSL checks")
     ssl.SSLContext.verify_mode = property(lambda self: ssl.CERT_NONE, lambda self, newval: None)
 
 class API:
     web_host = '0.0.0.0'
-    web_port = 8765
+    web_port = 10000
     text_host = '0.0.0.0'
     text_port = 8000
     text_loop = asyncio.new_event_loop()
     ws_loop = asyncio.new_event_loop()
     
     def __init__(self):
-        print("Launching bot...", flush=True)
+        print("Launching bot...")
         self.bot = Parser()
             
     async def text_send_coroutine(self, payload: str, writer):
@@ -33,7 +34,7 @@ class API:
         await writer.drain()
         
     async def handle_text_connection(self, reader, writer):
-        print("Text connection", flush=True)
+        print("Text connection")
         while True:
             prompt = await reader.readline()
             if not prompt:
@@ -48,15 +49,17 @@ class API:
         await websocket.send(json.dumps(response))
 
     async def handle_ws_connection(self, websocket):
-        print("WS connection", flush=True)
+        print("WS connection")
         try:
             async for message in websocket:
-                print("Received message " + str(message), flush=True)
+                print("Received message " + str(message))
                 try:
                     m=json.loads(message)
                 except json.JSONDecodeError as e:
-                    print(str(e), flush=True)
+                    print(str(e))
                     continue
+                # Check if prompt from web or message from whatsapp
+                # {'type': 'prompt', 'prompt': 'prompt text', 'hear_thoughts': True}
                 if (m.get("type") == 'prompt'):
                     correlation_id=f'{uuid.uuid4()}'
                     def callback(x):
@@ -67,26 +70,64 @@ class API:
                                 x, 
                                 'response', 
                                 correlation_id))
-                    await self.bot.prompt_with_callback(m["prompt"], callback=callback)
+                    await self.bot.prompt_with_callback(
+                        m["prompt"], 
+                        callback=callback, 
+                        hear_thoughts=m.get('hear_thoughts', False),
+                        session_id=m.get('session_id', 'static'))
                 # {'type': 'system', 'command': 'update_prompt_template', 'prompt': 'new prompt'}
                 if (m.get("type") == 'system'):
                     if (m.get("command") == 'update_prompt_template'):
                         self.bot.update_prompt_template(m.get("prompt"))
         except ConnectionClosedError:
-            print("WS connection broken", flush=True)
+            print("WS connection broken")
             await websocket.close()
 
+    def format_whatsapp_outbound(self, recipient: str, text: str) -> str:
+        return json.dumps({
+            "messaging_product": "whatsapp",
+            "preview_url": False,
+            "recipient_type": "individual",
+            "to": recipient,
+            "type": "text",
+            "text": {
+                "body": text
+            }
+        })
+
+    async def send_whatsapp_message(self, text: str):
+        # Send a message to whatsapp
+        headers = {
+            "Content-type": "application/json",
+            "Authorization": f"Bearer {os.environ.get('WHATSAPP_ACCESS_TOKEN')}",
+        }
+        data = self.format_whatsapp_outbound(os.environ.get('WHATSAPP_RECIPIENT_WAID'), text)
+        async with aiohttp.ClientSession() as session:
+            url = 'https://graph.facebook.com/v13.0/' + f"{os.environ.get('WHATSAPP_PHONE_NUMBER_ID')}/messages"
+            try:
+                async with session.post(url, data=data, headers=headers) as response:
+                    if response.status == 200:
+                        print("Status:", response.status)
+                        print("Content-type:", response.headers['content-type'])
+                        html = await response.text()
+                        print("Body:", html)
+                    else:
+                        print(response.status)        
+                        print(response)        
+            except aiohttp.ClientConnectorError as e:
+                print('Connection Error', str(e))
+
     async def main(self):
-        print("Launching WS server", flush=True)
+        print("Launching WS server")
         ws_server = await serve(self.handle_ws_connection, self.web_host, self.web_port)
-        print(f"WS started on port {self.web_port}", flush=True)
+        print(f"WS started on port {self.web_port}")
         
-        print("Launching text server", flush=True)
+        print("Launching text server")
         text_server = await asyncio.start_server(
             self.handle_text_connection, 
             self.text_host, 
             self.text_port)
-        print(f'Text started on port {self.text_port}', flush=True)
+        print(f'Text started on port {self.text_port}')
         
         async with ws_server, text_server:
             await asyncio.gather(text_server.serve_forever(), ws_server.serve_forever())

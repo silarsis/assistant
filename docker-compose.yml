@@ -4,12 +4,14 @@ services:
     build: ./agent
     container_name: agent
     ports:
-      - "8765:8765"
+      - "10000:10000"
       - "8000:8000"
     environment:
       - INSECURE
+    volumes:
+      - ./volumes/gpt4all:/models
 
-  # gpt4all: # The core python gpt4all model
+  # gpt4all: # A local model, to run cheaper if you have the hardware
   #   deploy:
   #     resources:
   #       reservations:
@@ -20,12 +22,9 @@ services:
   #   build: ./gpt4all
   #   container_name: gpt4all
   #   ports:
-  #     - "8765:8765"
-  #     - "8000:8000"
+  #     - "8766:8766"
   #   volumes:
   #     - ./volumes/gpt4all:/models
-  #   environment:
-  #     - INSECURE
 
   webui: # The (currently web) interface for the assistant
     build: ./webui
@@ -88,3 +87,31 @@ services:
 #     depends_on:
 #       - "etcd"
 #       - "minio"
+
+# docker run --name motorhead -p 8080:8080 -e PORT=8080 -e REDIS_URL='redis://redis:6379' -d ghcr.io/getmetal/motorhead:latest
+
+  motorhead: # Memory
+    container_name: motorhead
+    image: ghcr.io/getmetal/motorhead:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - REDIS_URL=redis://redis:6379
+      - MOTORHEAD_LONG_TERM_MEMORY=True
+      - OPENAI_API_KEY
+    depends_on:
+      - "redis"
+
+  redis:
+    container_name: redis
+    image: redis/redis-stack:latest
+    restart: always
+    ports:
+      - '6379:6379'
+    volumes: 
+      - redis:/data
+
+volumes:
+  redis:
+    driver: local

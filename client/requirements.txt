@@ -4,3 +4,8 @@ PyAudio
 pyttsx3
 playsound==1.2.2
 python-dotenv
+openai
+deepgram-sdk
+elevenlabs
+mpv
+ffmpeg

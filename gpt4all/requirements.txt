@@ -1,4 +1,4 @@
-pyllamacpp
+gpt4all
 websockets
 loguru
 nest_asyncio

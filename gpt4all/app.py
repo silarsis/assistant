@@ -3,8 +3,8 @@ import os
 import ssl
 from websockets.server import serve
 from websockets.exceptions import ConnectionClosedError
+import models
 import json
-from prompt_parser import Parser
 import nest_asyncio
 import uuid
 from dotenv import load_dotenv
@@ -18,30 +18,13 @@ if os.getenv('INSECURE'):
 
 class API:
     web_host = '0.0.0.0'
-    web_port = 8765
-    text_host = '0.0.0.0'
-    text_port = 8000
+    web_port = 8766
     text_loop = asyncio.new_event_loop()
     ws_loop = asyncio.new_event_loop()
     
     def __init__(self):
         print("Launching bot...", flush=True)
-        self.bot = Parser()
-            
-    async def text_send_coroutine(self, payload: str, writer):
-        writer.write(payload.encode() + b'\n')
-        await writer.drain()
-        
-    async def handle_text_connection(self, reader, writer):
-        print("Text connection", flush=True)
-        while True:
-            prompt = await reader.readline()
-            if not prompt:
-                continue
-            def callback(x):
-                return self.text_loop.run_until_complete(
-                    self.text_send_coroutine(x, writer=writer))
-            await self.bot.prompt_with_callback(prompt, callback=callback)
+        self.bot = models.get(os.environ.get('MODEL', 'vicuna'))
             
     async def ws_send_coroutine(self, websocket, prompt: str, payload: str, type: str, correlation_id: str):
         response = {"type": type, "payload": payload, "correlationId": correlation_id, "prompt": prompt}
@@ -67,7 +50,7 @@ class API:
                                 x, 
                                 'response', 
                                 correlation_id))
-                    await self.bot.prompt_with_callback(m["prompt"], callback=callback)
+                    await self.bot.prompt_with_callback(m["prompt"], callback=callback, correlation_id=correlation_id, hear_thoughts=m.get("hearThoughts", False))
                 # {'type': 'system', 'command': 'update_prompt_template', 'prompt': 'new prompt'}
                 if (m.get("type") == 'system'):
                     if (m.get("command") == 'update_prompt_template'):
@@ -81,15 +64,7 @@ class API:
         ws_server = await serve(self.handle_ws_connection, self.web_host, self.web_port)
         print(f"WS started on port {self.web_port}", flush=True)
         
-        print("Launching text server", flush=True)
-        text_server = await asyncio.start_server(
-            self.handle_text_connection, 
-            self.text_host, 
-            self.text_port)
-        print(f'Text started on port {self.text_port}', flush=True)
-        
-        async with ws_server, text_server:
-            await asyncio.gather(text_server.serve_forever(), ws_server.serve_forever())
+        await ws_server.serve_forever()
 
 api = API()
 asyncio.run(api.main())
