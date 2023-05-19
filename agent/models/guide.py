@@ -1,6 +1,8 @@
 from langchain.agents import Tool
 from langchain.utilities import GoogleSearchAPIWrapper
 from langchain.utilities.wolfram_alpha import WolframAlphaAPIWrapper
+from langchain.tools.file_management.write import WriteFileTool
+from langchain.tools.file_management.read import ReadFileTool
 from huggingface_hub import hf_hub_download, try_to_load_from_cache
 from typing import List, Optional, Callable
 import guidance
@@ -102,12 +104,15 @@ class Guide:
         tools = []
         tools.append(Tool(name='Answer', func=lambda x: x, description="use when you already know the answer"))
         tools.append(Tool(name='Clarify', func=lambda x: x, description="use when you need more information"))
+        tools.append(WriteFileTool())
+        tools.append(ReadFileTool())
         if os.environ.get('WOLFRAM_ALPHA_APPID'):
             wolfram = WolframAlphaAPIWrapper()
             tools.append(Tool(name="Wolfram", func=wolfram.run, description="use when you need to answer factual questions about math, science, society, the time or culture"))
         if os.environ.get('GOOGLE_API_KEY'):
             search = GoogleSearchAPIWrapper()
             tools.append(Tool(name="Search", func=search.run, description="use when you need to answer questions about current events"))
+        print(f"Tools: {[tool.name for tool in tools]}")
         return tools
         
     def _setup_prompt_template(self, character: str):
@@ -154,7 +159,7 @@ Action Input: {{gen 'action_input' stop='Question:'}}
         print(f"Looking for tool for action '{action}'")
         if interim and hear_thoughts:
             interim(f"Thoughts: {response['thought']}\nAction: {action}\nAction Input: {action_input}\n")
-        tool = next((tool for tool in self.tools if tool.name == action), None)
+        tool = next((tool for tool in self.tools if tool.name.lower() == action.lower()), None)
         if tool:
             # Call the tool, include the output into the history and then recall the prompt
             print(f"  Calling {tool.name} with input {action_input}")
