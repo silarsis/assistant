@@ -22,27 +22,16 @@ class ElevenLabs:
         
     def say(self, text: str):
         print("Requesting TTS", flush=True)
-        # audio_stream = elevenlabs.generate(text=f'... ... ... {text}', voice=self._voices[0], stream=True)
+        audio_stream = elevenlabs.generate(text=f'... ... ... {text}', voice=self._voices[0])
         # elevenlabs.play(audio_stream)
-        voice_index = 0
-        tts_url = (
-            f"https://api.elevenlabs.io/v1/text-to-speech/{self._voices[voice_index]}"
-        )
-        response = requests.post(tts_url, headers=self._headers, json={"text": f'... ... ... {text}'})
+        elevenlabs.save(audio=audio_stream, filename="speech.mpeg")
+        try:
+            playsound("speech.mpeg", True)
+        except PlaysoundException:
+            print("Failed to play sound", flush=True)
+        os.remove("speech.mpeg")
+        return True
 
-        if response.status_code == 200:
-            with open("speech.mpeg", "wb") as f:
-                f.write(response.content)
-            try:
-                playsound("speech.mpeg", True)
-            except PlaysoundException:
-                print("Failed to play sound", flush=True)
-            os.remove("speech.mpeg")
-            return True
-        else:
-            print("Request failed with status code:", response.status_code)
-            print("Response content:", response.content)
-            return False
         
 class TTS:
     def __init__(self):
