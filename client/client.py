@@ -140,9 +140,15 @@ class Application(tk.Frame):
         json_message = {'prompt':message, 'type':'prompt', 'session_id':session_id}
         if self.hear_thoughts:
             json_message['hear_thoughts'] = True
-        try:
-            self.websocket.send(json.dumps(json_message))
-        except (ConnectionClosedError, AttributeError):
+        attempts = 0
+        while attempts < 3:
+            try:
+                self.websocket.send(json.dumps(json_message))
+                break
+            except (ConnectionClosedError, AttributeError):
+                self.connect()
+        else:
+            # Executed if we don't break out of the loop
             self.closed_connection()
             return
         self.response_text.configure(state=tk.NORMAL)
@@ -180,8 +186,10 @@ class Application(tk.Frame):
                     else:
                         self.talk.say(lambda: None, payload, lambda: None) # Don't stop listening, just say the response
             except ConnectionClosed:
+                self.closed_connection()
                 return
             except TypeError: # NoneType is not iterable
+                self.closed_connection()
                 return
 
     def quit(self):
