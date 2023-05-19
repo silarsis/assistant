@@ -30,29 +30,28 @@ class Memory:
     url: str = "http://motorhead:8080"
     timeout = 3000
     memory_key = "history"
-    session_id: str
     context: Optional[str] = None
     
-    def __init__(self, session_id: str):
-        self.session_id = session_id
-        self.refresh_from()
-        
-    def refresh_from(self):
+    def __init__(self):
+        self.context = {}
+        self.messages = {}
+    
+    def refresh_from(self, session_id: str):
         res = requests.get(
-            f"{self.url}/sessions/{self.session_id}/memory",
+            f"{self.url}/sessions/{session_id}/memory",
             timeout=self.timeout,
             headers={"Content-Type": "application/json"},
         )
         res_data = res.json()
-        self.context = res_data.get("context", "NONE")
+        self.context[session_id] = res_data.get("context", "NONE")
         messages = res_data.get("messages", [])
         messages.reverse()
-        self.messages = messages # Not strictly thread safe, but not too harmful
-        print(f"Memory refreshed, current context: {self.context}, length: {len(self.messages)}")
+        self.messages[session_id] = messages # Not strictly thread safe, but not too harmful
+        print(f"Memory refreshed, current context: {self.context[session_id]}, length: {len(self.messages[session_id])}")
 
-    def add_message(self, role: str, content: str):
+    def add_message(self, role: str, content: str, session_id: str):
         requests.post(
-            f"{self.url}/sessions/{self.session_id}/memory",
+            f"{self.url}/sessions/{session_id}/memory",
             timeout=self.timeout,
             json={
                 "messages": [
@@ -61,14 +60,16 @@ class Memory:
             },
             headers={"Content-Type": "application/json"},
         )
-        self.messages.append({"role": role, "content": content})
+        self.messages.setdefault(session_id, []).append({"role": role, "content": content})
         
-    def get_history(self) -> List[str]:
-        return [message["content"] for message in self.messages]
+    def get_history(self, session_id) -> List[str]:
+        if session_id not in self.messages:
+            self.refresh_from(session_id)
+        return [message["content"] for message in self.messages[session_id]]
     
-    def get_context(self) -> str:
-        self.refresh_from()
-        return self.context
+    def get_context(self, session_id) -> str:
+        self.refresh_from(session_id)
+        return self.context[session_id]
 
 
 def load_vicuna():
@@ -89,7 +90,7 @@ def load_vicuna():
 class Guide:
     def __init__(self, character: str):
         print("Initialising Guide")
-        self.memory = Memory(session_id="static")
+        self.memory = Memory()
         self.tools = self._setup_tools()
         # self.guide = guidance.llms.transformers.Vicuna(load_vicuna())
         self.guide = guidance.llms.OpenAI('text-davinci-003')
@@ -132,20 +133,20 @@ Action: {{gen 'action'}}
 Action Input: {{gen 'action_input' stop='Question:'}}
 """, llm=self.guide, character=character, tool_names=[tool.name for tool in self.tools])
 
-    async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], hear_thoughts: bool = False) -> None:
-        response = self.prompt(query=prompt, interim=callback, hear_thoughts=hear_thoughts)
+    async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], hear_thoughts: bool = False, session_id: str='static') -> None:
+        response = self.prompt(query=prompt, interim=callback, hear_thoughts=hear_thoughts, session_id=session_id)
         return callback(response)
     
-    def prompt(self, query: str, history: str="", interim: Optional[Callable[[str], None]]=None, hear_thoughts: bool = False) -> str:
+    def prompt(self, query: str, history: str="", interim: Optional[Callable[[str], None]]=None, hear_thoughts: bool = False, session_id: str='static') -> str:
         print(f"Prompt: {query}")
         if not history:
-            history = self.memory.get_history()
+            history = self.memory.get_history(session_id=session_id)
         print(f"History: {history}")
-        self.memory.add_message(role="Human", content=f'Question: {query}')
+        self.memory.add_message(role="Human", content=f'Question: {query}', session_id=session_id)
         response = self._prompt_template(query=query, history=history)
         action = response['action'].strip()
         action_input = response['action_input'].strip()
-        self.memory.add_message(role="AI", content=f"Action: {action}\nAction Input: {action_input}\n")
+        self.memory.add_message(role="AI", content=f"Action: {action}\nAction Input: {action_input}\n", session_id=session_id)
         # Clarify should probably actually do something interesting with the history or something
         if action in ('Answer', 'Clarify'):
             # This represents a completed answer
@@ -162,8 +163,8 @@ Action Input: {{gen 'action_input' stop='Question:'}}
             except:
                 print("  tool raised an exception")
                 tool_output = "This tool failed to run"
-            self.memory.add_message(role="AI", content=f"Outcome: {tool_output}")
-            return self.prompt(query=query, history=f"{self.memory.get_context()}\nAction: {action}\nAction Input: {action_input}\nOutcome: {tool_output}\n")
+            self.memory.add_message(role="AI", content=f"Outcome: {tool_output}", session_id=session_id)
+            return self.prompt(query=query, history=f"{self.memory.get_context(session_id=session_id)}\nAction: {action}\nAction Input: {action_input}\nOutcome: {tool_output}\n")
         else:
             print(f"  No tool found for action '{action}'")
-            return self.prompt(query=query, history=f"{self.memory.get_context()}\nAction: {action}\nAction Input: {action_input}\nOutcome: No tool found for action '{action}'\n")
+            return self.prompt(query=query, history=f"{self.memory.get_context(session_id=session_id)}\nAction: {action}\nAction Input: {action_input}\nOutcome: No tool found for action '{action}'\n")

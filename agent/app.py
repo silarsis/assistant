@@ -70,7 +70,11 @@ class API:
                                 x, 
                                 'response', 
                                 correlation_id))
-                    await self.bot.prompt_with_callback(m["prompt"], callback=callback, hear_thoughts=m.get('hear_thoughts', False))
+                    await self.bot.prompt_with_callback(
+                        m["prompt"], 
+                        callback=callback, 
+                        hear_thoughts=m.get('hear_thoughts', False),
+                        session_id=m.get('session_id', 'static'))
                 # {'type': 'system', 'command': 'update_prompt_template', 'prompt': 'new prompt'}
                 if (m.get("type") == 'system'):
                     if (m.get("command") == 'update_prompt_template'):

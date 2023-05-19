@@ -1,5 +1,4 @@
 import tkinter as tk
-from tkinter import ttk
 import json
 from websockets.sync.client import connect
 from websockets.exceptions import ConnectionClosed, ConnectionClosedError
@@ -45,10 +44,8 @@ class Application(tk.Frame):
         # Listening toggle
         listen_frame = tk.Frame(control_frame)
         self.listening = False
-        self.listen_button = tk.Button(listen_frame, text="Start Listening", command=self.start_listening)
+        self.listen_button = tk.Button(listen_frame, text="Start Listening", command=self.toggle_listening)
         self.listen_button.pack(padx=5, pady=5)
-        self.stop_listening_button = tk.Button(listen_frame, text="Stop Listening", command=self.stop_listening, state=tk.DISABLED)
-        self.stop_listening_button.pack(padx=5, pady=5)
         listen_frame.pack(fill=tk.Y, side="left", padx=5, pady=5)
         # Variables to control the response
         var_frame = tk.Frame(control_frame)
@@ -80,21 +77,27 @@ class Application(tk.Frame):
         response_frame.pack(fill=tk.BOTH)
 
     def start_listening(self):
-        self.listen_button.configure(state=tk.DISABLED)
         self.listen.start_listening()
-        self.stop_listening_button.configure(state=tk.NORMAL)
         
     def stop_listening(self):
-        self.stop_listening_button.configure(state=tk.DISABLED)
         self.listen.stop_listening()
-        self.listen_button.configure(state=tk.NORMAL)
+        
+    def toggle_listening(self):
+        if self.listening:
+            self.listen_button.configure(text="Start Listening")
+            self.listening = False
+            self.listen.stop_listening()
+        else:
+            self.listen_button.configure(text="Stop Listening")
+            self.listening = True
+            self.listen.start_listening()
         
     def toggle_hear_thoughts(self):
         if self.hear_thoughts:
-            self.hear_thoughts_button.configure(text="Stop Hearing Thoughts")
+            self.hear_thoughts_button.configure(text="Hear Thoughts")
             self.hear_thoughts = False
         else:
-            self.hear_thoughts_button.configure(text="Hear Thoughts")
+            self.hear_thoughts_button.configure(text="Stop Hearing Thoughts")
             self.hear_thoughts = True
         
     def closed_connection(self):
@@ -121,7 +124,6 @@ class Application(tk.Frame):
             self.message_entry.configure(state=tk.NORMAL)
             thread = threading.Thread(target=self.receive_messages)
             thread.start()
-            self.start_listening()
         except Exception as e:
             print(f"Failed to connect to {uri}: {e}")
             self.closed_connection()
@@ -132,8 +134,7 @@ class Application(tk.Frame):
         if not message:
             print("Nothing to send, not sending")
             return
-        session_id = self.session_id_entry.get(1.0, "end-1c").encode()
-        session_id = session_id.decode('utf-8')
+        session_id = self.session_id_entry.get()
         if not session_id:
             session_id = 'client'
         json_message = {'prompt':message, 'type':'prompt', 'session_id':session_id}
@@ -175,7 +176,7 @@ class Application(tk.Frame):
                         print("Garbled message, ignoring...")
                     self.response_text.after(1, self.add_to_response_text, payload)
                     if self.listen.listening:
-                        self.talk.say(self.stop_listening, payload, self.start_listening) # Stop listening, say the response, then start listening again
+                        self.talk.say(self.toggle_listening, payload, self.toggle_listening) # Stop listening, say the response, then start listening again
                     else:
                         self.talk.say(lambda: None, payload, lambda: None) # Don't stop listening, just say the response
             except ConnectionClosed:
