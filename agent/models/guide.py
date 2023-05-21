@@ -5,6 +5,7 @@ from langchain.tools.file_management.write import WriteFileTool
 from langchain.tools.file_management.read import ReadFileTool
 from huggingface_hub import hf_hub_download, try_to_load_from_cache
 from typing import List, Optional, Callable
+from models.tools import web_requests
 import guidance
 import requests
 import os
@@ -166,8 +167,9 @@ class Guide:
         tools = []
         tools.append(Tool(name='Answer', func=lambda x: x, description="use when you already know the answer"))
         tools.append(Tool(name='Clarify', func=lambda x: x, description="use when you need more information"))
-        tools.append(WriteFileTool())
-        tools.append(ReadFileTool())
+        tools.append(Tool(name='Request', func=web_requests.scrape_text, description="use when you need to make a request to a website, provide the url as action input"))
+        # tools.append(WriteFileTool())
+        # tools.append(ReadFileTool())
         if os.environ.get('WOLFRAM_ALPHA_APPID'):
             wolfram = WolframAlphaAPIWrapper()
             tools.append(Tool(name="Wolfram", func=wolfram.run, description="use when you need to answer factual questions about math, science, society, the time or culture"))
