@@ -41,7 +41,6 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: ./agent/
-          file: Dockerfile-installer
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: silarsis/assistant-agent:latest
