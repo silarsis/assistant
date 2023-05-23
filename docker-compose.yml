@@ -8,8 +8,8 @@ services:
       - "8000:8000"
     environment:
       - INSECURE
-    volumes:
-      - ./volumes/gpt4all:/models
+    # volumes:
+    #   - ./volumes/gpt4all:/models
 
   # gpt4all: # A local model, to run cheaper if you have the hardware
   #   deploy:
