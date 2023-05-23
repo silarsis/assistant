@@ -14,6 +14,8 @@ keys or configurations as needed. You can find them in each of the sub-directori
 is the one in `agent/`
 
 To run the client, cd into the client/ directory and run `pip install -r requirements.txt` followed by `python ./client.py`
+If the client gives you errors on pip install regarding `portaudio.h`, then check https://stackoverflow.com/a/65411355
+If you get a "may not be configured for Tk" error when running, please refer to https://stackoverflow.com/q/5459444
 
 ## Goals
 
