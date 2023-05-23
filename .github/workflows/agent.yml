@@ -1,0 +1,88 @@
+name: Agent Build
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - agent/*
+  workflow_dispatch:
+
+jobs:
+  build_push_installer:
+    name: Build and push the installer to docker hub
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+        
+      # https://github.com/docker/setup-qemu-action
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+        
+      # https://github.com/docker/setup-buildx-action
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: silarsis/assistant-agent
+          
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          context: ./agent/
+          file: Dockerfile-installer
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: silarsis/assistant-agent:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  push_to_registry:
+    name: Push Docker image to Docker Hub
+    runs-on: ubuntu-latest
+    needs: build_push_installer
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+        
+      # https://github.com/docker/setup-qemu-action
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+        
+      # https://github.com/docker/setup-buildx-action
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: silarsis/assistant-agent
+          
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          context: ./agent/
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: silarsis/assistant-agent:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
