@@ -10,3 +10,4 @@ wolframalpha
 transformers[agents]
 bs4
 guidance
+certifi
