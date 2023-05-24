@@ -10,8 +10,13 @@ import guidance
 import requests
 import os
 
+# /openai/deployments/text-davinci-003/chat/completions?api-version=2023-03-15-preview
+
 ## Monkey patch
 from guidance.llms import _openai
+from guidance.llms._llm import LLMSession
+import asyncio
+import openai
 import types
 
 def add_text_to_chat_mode(chat_mode):
@@ -23,8 +28,95 @@ def add_text_to_chat_mode(chat_mode):
         return chat_mode
 
 _openai.add_text_to_chat_mode = add_text_to_chat_mode
-## End monkey patch
 
+class OpenAISession(LLMSession):
+    async def __call__(self, prompt, stop=None, stop_regex=None, temperature=None, n=1, max_tokens=1000, logprobs=None, top_p=1.0, echo=False, logit_bias=None, token_healing=None, pattern=None, stream=None, cache_seed=0, caching=None):
+        """ Generate a completion of the given prompt.
+        """
+
+        # we need to stream in order to support stop_regex
+        if stream is None:
+            stream = stop_regex is not None
+        assert stop_regex is None or stream, "We can only support stop_regex for the OpenAI API when stream=True!"
+        assert stop_regex is None or n == 1, "We don't yet support stop_regex combined with n > 1 with the OpenAI API!"
+
+        assert token_healing is None or token_healing is False, "The OpenAI API does not yet support token healing! Please either switch to an endpoint that does, or don't use the `token_healing` argument to `gen`."
+
+        # set defaults
+        if temperature is None:
+            temperature = self.llm.temperature
+
+        # get the arguments as dictionary for cache key generation
+        args = locals().copy()
+
+        assert not pattern, "The OpenAI API does not support Guidance pattern controls! Please either switch to an endpoint that does, or don't use the `pattern` argument to `gen`."
+        # assert not stop_regex, "The OpenAI API does not support Guidance stop_regex controls! Please either switch to an endpoint that does, or don't use the `stop_regex` argument to `gen`."
+
+        # define the key for the cache
+        key = self._cache_key(args)
+        
+        # allow streaming to use non-streaming cache (the reverse is not true)
+        if key not in self.llm.__class__.cache and stream:
+            args["stream"] = False
+            key1 = self._cache_key(args)
+            if key1 in self.llm.__class__.cache:
+                key = key1
+        
+        # check the cache
+        if key not in self.llm.__class__.cache or (caching is not True and not self.llm.caching) or caching is False:
+
+            # ensure we don't exceed the rate limit
+            while self.llm.count_calls() > self.llm.max_calls_per_min:
+                await asyncio.sleep(1)
+
+            fail_count = 0
+            while True:
+                try_again = False
+                try:
+                    self.llm.add_call()
+                    call_args = {
+                        "model": self.llm.model_name,
+                        "prompt": prompt,
+                        "max_tokens": max_tokens,
+                        "temperature": temperature,
+                        "top_p": top_p,
+                        "n": n,
+                        "stop": stop,
+                        "logprobs": logprobs,
+                        "echo": echo,
+                        "stream": stream,
+                        "engine": self.llm.model_name,
+                    }
+                    if logit_bias is not None:
+                        call_args["logit_bias"] = {str(k): v for k,v in logit_bias.items()} # convert keys to strings since that's the open ai api's format
+                    out = self.llm.caller(**call_args)
+
+                except openai.error.RateLimitError:
+                    await asyncio.sleep(3)
+                    try_again = True
+                    fail_count += 1
+                
+                if not try_again:
+                    break
+
+                if fail_count > self.llm.max_retries:
+                    raise Exception(f"Too many (more than {self.llm.max_retries}) OpenAI API RateLimitError's in a row!")
+
+            if stream:
+                return self.llm.stream_then_save(out, key, stop_regex, n)
+            else:
+                self.llm.__class__.cache[key] = out
+        
+        # wrap as a list if needed
+        if stream:
+            if isinstance(self.llm.__class__.cache[key], list):
+                return self.llm.__class__.cache[key]
+            return [self.llm.__class__.cache[key]]
+        
+        return self.llm.__class__.cache[key]
+
+guidance.llms._openai.OpenAISession = OpenAISession
+## End monkey patch
 
 TEMPERATURE = 0.2
 
@@ -61,13 +153,54 @@ Action: {{gen 'action'}}
 Action Input: {{gen 'action_input' stop='Human:'}}
 """
 
-class Memory:
+class LocalMemory:
+    context: Optional[str] = None
+    
+    def __init__(self, llm=None, default_character=None):
+        self.context = {}
+        self.messages = {}
+        self.llm = llm
+        self.default_character = default_character
+        self._prompt_templates = PromptTemplate(default_character, "Summarise the following conversation, taking the existing context into account:\nContext:\n{{context}}\n\nHistory:{{history}}\n\nSummary:{{gen 'summary'}}")
+        
+    def refresh_from(self, session_id: str):
+        self.context.setdefault(session_id, "")
+        self.messages.setdefault(session_id, [])
+        return
+    
+    def _summarise(self, session_id: str):
+        contextualise = self.messages[session_id][:-10]
+        if not contextualise:
+            return
+        self.messages[session_id] = self.messages[session_id][-10:]
+        prompt = self._prompt_templates.get(session_id, self.llm)
+        response = prompt(context=self.get_context(), history="\n".join([message["content"] for message in contextualise]))
+        print(response['summary'])
+        return response['summary']
+    
+    def add_message(self, role: str, content: str, session_id: str):
+        self.messages.setdefault(session_id, []).append({"role": role, "content": content})
+        if len(self.messages[session_id]) > 20:
+            self._summarise(session_id)
+        self.context[session_id] = content
+        
+    def get_history(self, session_id) -> List[str]:
+        return [message["content"] for message in self.messages.setdefault(session_id, [])]
+
+    def get_formatted_history(self, session_id) -> str:
+        history = self.get_history(session_id)
+        return "\n".join(history)
+    
+    def get_context(self, session_id) -> str:
+        return self.context.setdefault(session_id, "")
+
+class MotorheadMemory:
     url: str = "http://motorhead:8080"
     timeout = 3000
     memory_key = "history"
     context: Optional[str] = None
     
-    def __init__(self):
+    def __init__(self, llm=None, default_character=None):
         self.context = {}
         self.messages = {}
     
@@ -82,7 +215,6 @@ class Memory:
         messages = res_data.get("messages", [])
         messages.reverse()
         self.messages[session_id] = messages # Not strictly thread safe, but not too harmful
-        # print(f"Memory refreshed, current context: {self.context[session_id]}, length: {len(self.messages[session_id])}")
 
     def add_message(self, role: str, content: str, session_id: str):
         requests.post(
@@ -110,6 +242,10 @@ class Memory:
         self.refresh_from(session_id)
         return self.context[session_id]
 
+if os.environ.get('MEMORY') == 'local':
+    Memory = LocalMemory
+else:
+    Memory = MotorheadMemory
 
 class PromptTemplate:
     def __init__(self, default_character: str, default_prompt: str):
@@ -154,10 +290,10 @@ def load_vicuna():
 class Guide:
     def __init__(self, default_character: str):
         print("Initialising Guide")
-        self.memory = Memory()
         self.tools = self._setup_tools()
         # self.guide = guidance.llms.transformers.Vicuna(load_vicuna())
         self.guide = guidance.llms.OpenAI('text-davinci-003')
+        self.memory = Memory(llm=self.guide, default_character=default_character)
         self.default_character = default_character
         self._prompt_templates = PromptTemplate(default_character, DEFAULT_PROMPT)
         print("Guide initialised")
