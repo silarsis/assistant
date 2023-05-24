@@ -7,7 +7,16 @@ services:
       - "10000:10000"
       - "8000:8000"
     environment:
-      - INSECURE
+      - MEMORY
+      - OPENAI_API_KEY
+      - OPENAI_API_TYPE
+      - OPENAI_API_BASE
+      - OPENAI_API_VERSION
+      - OPENAI_DEPLOYMENT_NAME
+      - GOOGLE_API_KEY
+      - GOOGLE_CSE_ID
+      - WOLFRAM_ALPHA_APPID
+
     # volumes:
     #   - ./volumes/gpt4all:/models
 
