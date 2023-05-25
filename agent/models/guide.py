@@ -153,6 +153,18 @@ Action: {{gen 'action'}}
 Action Input: {{gen 'action_input' stop='Human:'}}
 """
 
+DEFAULT_TOOL_PROMPT = """
+{{character}}
+
+Given the following information:
+
+{{tool_output}}
+
+The answer to the question '{{query}}' is:
+
+{{gen 'answer'}}
+"""
+
 class LocalMemory:
     context: Optional[str] = None
     
@@ -296,6 +308,7 @@ class Guide:
         self.memory = Memory(llm=self.guide, default_character=default_character)
         self.default_character = default_character
         self._prompt_templates = PromptTemplate(default_character, DEFAULT_PROMPT)
+        self._tool_response_prompt_templates = PromptTemplate(default_character, DEFAULT_TOOL_PROMPT)
         print("Guide initialised")
         
     def _setup_tools(self) -> List[Tool]:
@@ -317,6 +330,9 @@ class Guide:
         
     def _get_prompt_template(self, session_id: str) -> str:
         return self._prompt_templates.get(session_id, self.guide)(tool_names=[tool.name for tool in self.tools])
+    
+    def _get_tool_response_prompt_template(self, session_id: str) -> str:
+        return self._tool_response_prompt_templates.get(session_id, self.guide)
         
     async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], **kwargs) -> None:
         response = self.prompt(query=prompt, interim=callback, hear_thoughts=kwargs.get('hear_thoughts', False), session_id=kwargs.get('session_id', 'static'))
@@ -328,7 +344,6 @@ class Guide:
         hear_thoughts = kwargs.get('hear_thoughts', False)
         if not history:
             history = self.memory.get_formatted_history(session_id=session_id)
-        # print(f"History: {history}")
         history_context = self.memory.get_context(session_id=session_id)
         self.memory.add_message(role="Human", content=f'Human: {query}', session_id=session_id)
         response = self._get_prompt_template(session_id)(query=query, history=history, context=history_context)
@@ -352,7 +367,9 @@ class Guide:
                 print("  tool raised an exception")
                 tool_output = "This tool failed to run"
             self.memory.add_message(role="AI", content=f"Outcome: {tool_output}", session_id=session_id)
-            return self.prompt(query=query)
+            response = self._get_tool_response_prompt_template(session_id)(query=query, tool_output=tool_output)
+            self.memory.add_message(role="AI", content=f"Action: Answer\nAction Input: {response['answer']}\n", session_id=session_id)
+            return response['answer']
         else:
             print(f"  No tool found for action '{action}'")
             return self.prompt(query=query, history=f"{self.memory.get_context(session_id=session_id)}\nAction: {action}\nAction Input: {action_input}\nOutcome: No tool found for action '{action}'\n")
