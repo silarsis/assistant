@@ -11,3 +11,5 @@ transformers[agents]
 bs4
 guidance
 certifi
+apify-client
+pymilvus

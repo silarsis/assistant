@@ -1,11 +1,14 @@
+## Tools
 from langchain.agents import Tool
 from langchain.utilities import GoogleSearchAPIWrapper
 from langchain.utilities.wolfram_alpha import WolframAlphaAPIWrapper
 from langchain.tools.file_management.write import WriteFileTool
 from langchain.tools.file_management.read import ReadFileTool
+from models.tools import apify
+from models.tools import web_requests
+
 from huggingface_hub import hf_hub_download, try_to_load_from_cache
 from typing import List, Optional, Callable
-from models.tools import web_requests
 import guidance
 import requests
 import os
@@ -319,6 +322,10 @@ class Guide:
         tools.append(Tool(name='Request', func=web_requests.scrape_text, description="use when you need to make a request to a website, provide the url as action input"))
         # tools.append(WriteFileTool())
         # tools.append(ReadFileTool())
+        if os.environ.get('APIFY_API_TOKEN'):
+            self.apify = apify.ApifyTool()
+            tools.append(Tool(name='Scrape', func=self.apify.scrape_website, description="use when you need to scrape a website, provide the url as action input"))
+            tools.append(Tool(name='Lookup', func=self.apify.query, description="use when you need to check if you already know something, provide the query as action input"))
         if os.environ.get('WOLFRAM_ALPHA_APPID'):
             wolfram = WolframAlphaAPIWrapper()
             tools.append(Tool(name="Wolfram", func=wolfram.run, description="use when you need to answer factual questions about math, science, society, the time or culture"))
@@ -363,8 +370,9 @@ class Guide:
             print(f"  Calling {tool.name} with input {action_input}")
             try:
                 tool_output = tool.func(action_input)
-            except:
+            except Exception as e:
                 print("  tool raised an exception")
+                print(e)
                 tool_output = "This tool failed to run"
             self.memory.add_message(role="AI", content=f"Outcome: {tool_output}", session_id=session_id)
             response = self._get_tool_response_prompt_template(session_id)(query=query, tool_output=tool_output)
