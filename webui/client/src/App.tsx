@@ -8,6 +8,7 @@ import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
 import Card from 'react-bootstrap/Card';
 import ButtonGroup from 'react-bootstrap/ButtonGroup';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 
 function App() {
   const [response, setState] = useState({});
@@ -84,68 +85,70 @@ function App() {
   }
 
   return (
-    <Container fluid className="mt-5">
-      <Row className='me-1 mb-4'>
-        <Col>
-          <Form onSubmit={onSubmit}>
-            <Form.Group controlId="promptGroup">
-              <Container>
-                <Row className='me-1'>
-                  <Col md="1" className='d-flex justify-content-center align-items-center'>
-                    <Form.Label className=' mb-0'>Prompt</Form.Label>
-                  </Col>
-                  <Col md="8">
-                    <Form.Control type="text" placeholder="Enter prompt" name="prompt" />
-                  </Col>
-                  <Col md="3">
-                    <ButtonGroup className="d-flex">
-                      <Button variant="primary" type="submit">
-                        Submit
-                      </Button>
-                      <Button variant="secondary" type="button" onClick={clear}>
-                        Clear
-                      </Button>
-                      <Button variant="warning" type="button">
-                        Stop
-                      </Button>
-                    </ButtonGroup>
-                  </Col>
-                </Row>
-              </Container>
-            </Form.Group>
-          </Form>
-        </Col>
-      </Row>
-      {
-        getAnswersAsRows().map(el => (
-          <Row className='me-1 mb-2'>
-            <Col>
-              <Card>
-                <Card.Body>
-                  <Card.Header>
-                    <Container>
-                      <Row fluid>
-                        <Col className='d-flex align-items-center'>
-                          <span className='cap'>Prompt:</span>&nbsp;<span className="sub">{el.prompt}</span>
-                        </Col>
-                        <Col md='2'>
-                          <ButtonGroup className="d-flex">
-                            <Button onClick={() => deleteRow(el.key)} type="button" variant="outline-primary">Delete</Button>
-                          </ButtonGroup>
-                        </Col>
-                      </Row>
-                    </Container>
-                  </Card.Header>
-                  <Card.Text className="css-fix">
-                    {el.state}
-                  </Card.Text>
-                </Card.Body>
-              </Card>
-            </Col>
-          </Row>
-        ))
-      }
-    </Container >
+    <GoogleOAuthProvider clientId="438635256773-rf4rmv51lo436a576enb74t7pc9n8rre.apps.googleusercontent.com">
+      <Container fluid className="mt-5">
+        <Row className='me-1 mb-4'>
+          <Col>
+            <Form onSubmit={onSubmit}>
+              <Form.Group controlId="promptGroup">
+                <Container>
+                  <Row className='me-1'>
+                    <Col md="1" className='d-flex justify-content-center align-items-center'>
+                      <Form.Label className=' mb-0'>Prompt</Form.Label>
+                    </Col>
+                    <Col md="8">
+                      <Form.Control type="text" placeholder="Enter prompt" name="prompt" />
+                    </Col>
+                    <Col md="3">
+                      <ButtonGroup className="d-flex">
+                        <Button variant="primary" type="submit">
+                          Submit
+                        </Button>
+                        <Button variant="secondary" type="button" onClick={clear}>
+                          Clear
+                        </Button>
+                        <Button variant="warning" type="button">
+                          Stop
+                        </Button>
+                      </ButtonGroup>
+                    </Col>
+                  </Row>
+                </Container>
+              </Form.Group>
+            </Form>
+          </Col>
+        </Row>
+        {
+          getAnswersAsRows().map(el => (
+            <Row className='me-1 mb-2'>
+              <Col>
+                <Card>
+                  <Card.Body>
+                    <Card.Header>
+                      <Container>
+                        <Row fluid>
+                          <Col className='d-flex align-items-center'>
+                            <span className='cap'>Prompt:</span>&nbsp;<span className="sub">{el.prompt}</span>
+                          </Col>
+                          <Col md='2'>
+                            <ButtonGroup className="d-flex">
+                              <Button onClick={() => deleteRow(el.key)} type="button" variant="outline-primary">Delete</Button>
+                            </ButtonGroup>
+                          </Col>
+                        </Row>
+                      </Container>
+                    </Card.Header>
+                    <Card.Text className="css-fix">
+                      {el.state}
+                    </Card.Text>
+                  </Card.Body>
+                </Card>
+              </Col>
+            </Row>
+          ))
+        }
+      </Container >
+    </GoogleOAuthProvider>
   );
 }
 

@@ -6,6 +6,13 @@ from langchain.tools.file_management.write import WriteFileTool
 from langchain.tools.file_management.read import ReadFileTool
 from models.tools import apify
 from models.tools import web_requests
+from langchain.document_loaders import TextLoader
+
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.vectorstores import Chroma
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.llms import OpenAI
+from langchain.chains import RetrievalQA
 
 from huggingface_hub import hf_hub_download, try_to_load_from_cache
 from typing import List, Optional, Callable
