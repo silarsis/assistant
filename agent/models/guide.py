@@ -24,9 +24,6 @@ import os
 
 ## Monkey patch
 from guidance.llms import _openai
-from guidance.llms._llm import LLMSession
-import asyncio
-import openai
 import types
 
 def add_text_to_chat_mode(chat_mode):
@@ -38,95 +35,6 @@ def add_text_to_chat_mode(chat_mode):
         return chat_mode
 
 _openai.add_text_to_chat_mode = add_text_to_chat_mode
-
-class OpenAISession(LLMSession):
-    async def __call__(self, prompt, stop=None, stop_regex=None, temperature=None, n=1, max_tokens=1000, logprobs=None, top_p=1.0, echo=False, logit_bias=None, token_healing=None, pattern=None, stream=None, cache_seed=0, caching=None):
-        """ Generate a completion of the given prompt.
-        """
-
-        # we need to stream in order to support stop_regex
-        if stream is None:
-            stream = stop_regex is not None
-        assert stop_regex is None or stream, "We can only support stop_regex for the OpenAI API when stream=True!"
-        assert stop_regex is None or n == 1, "We don't yet support stop_regex combined with n > 1 with the OpenAI API!"
-
-        assert token_healing is None or token_healing is False, "The OpenAI API does not yet support token healing! Please either switch to an endpoint that does, or don't use the `token_healing` argument to `gen`."
-
-        # set defaults
-        if temperature is None:
-            temperature = self.llm.temperature
-
-        # get the arguments as dictionary for cache key generation
-        args = locals().copy()
-
-        assert not pattern, "The OpenAI API does not support Guidance pattern controls! Please either switch to an endpoint that does, or don't use the `pattern` argument to `gen`."
-        # assert not stop_regex, "The OpenAI API does not support Guidance stop_regex controls! Please either switch to an endpoint that does, or don't use the `stop_regex` argument to `gen`."
-
-        # define the key for the cache
-        key = self._cache_key(args)
-        
-        # allow streaming to use non-streaming cache (the reverse is not true)
-        if key not in self.llm.__class__.cache and stream:
-            args["stream"] = False
-            key1 = self._cache_key(args)
-            if key1 in self.llm.__class__.cache:
-                key = key1
-        
-        # check the cache
-        if key not in self.llm.__class__.cache or (caching is not True and not self.llm.caching) or caching is False:
-
-            # ensure we don't exceed the rate limit
-            while self.llm.count_calls() > self.llm.max_calls_per_min:
-                await asyncio.sleep(1)
-
-            fail_count = 0
-            while True:
-                try_again = False
-                try:
-                    self.llm.add_call()
-                    call_args = {
-                        "model": self.llm.model_name,
-                        "prompt": prompt,
-                        "max_tokens": max_tokens,
-                        "temperature": temperature,
-                        "top_p": top_p,
-                        "n": n,
-                        "stop": stop,
-                        "logprobs": logprobs,
-                        "echo": echo,
-                        "stream": stream,
-                        "engine": self.llm.model_name,
-                    }
-                    if logit_bias is not None:
-                        call_args["logit_bias"] = {str(k): v for k,v in logit_bias.items()} # convert keys to strings since that's the open ai api's format
-                    out = self.llm.caller(**call_args)
-
-                except openai.error.RateLimitError:
-                    await asyncio.sleep(3)
-                    try_again = True
-                    fail_count += 1
-                
-                if not try_again:
-                    break
-
-                if fail_count > self.llm.max_retries:
-                    raise Exception(f"Too many (more than {self.llm.max_retries}) OpenAI API RateLimitError's in a row!")
-
-            if stream:
-                return self.llm.stream_then_save(out, key, stop_regex, n)
-            else:
-                self.llm.__class__.cache[key] = out
-        
-        # wrap as a list if needed
-        if stream:
-            if isinstance(self.llm.__class__.cache[key], list):
-                return self.llm.__class__.cache[key]
-            return [self.llm.__class__.cache[key]]
-        
-        return self.llm.__class__.cache[key]
-
-guidance.llms._openai.OpenAISession = OpenAISession
-## End monkey patch
 
 TEMPERATURE = 0.2
 
@@ -159,7 +67,7 @@ Chat History:
 Human: {{await 'query'}}
 Thought: {{gen 'thought'}}
 Criticism: {{gen 'criticism'}}
-Action: {{gen 'action'}}
+Action: {{gen 'action' stop='Action Input:'}}
 Action Input: {{gen 'action_input' stop='Human:'}}
 """
 
@@ -315,7 +223,7 @@ class Guide:
         self._google_docs_tokens = {}
         self.tools = self._setup_tools()
         # self.guide = guidance.llms.transformers.Vicuna(load_vicuna())
-        self.guide = guidance.llms.OpenAI('text-davinci-003')
+        self.guide = guidance.llms.OpenAI('text-davinci-003') # Because we want partial completions
         self.memory = Memory(llm=self.guide, default_character=default_character)
         self.default_character = default_character
         self._prompt_templates = PromptTemplate(default_character, DEFAULT_PROMPT)
