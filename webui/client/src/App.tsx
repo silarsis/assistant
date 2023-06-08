@@ -8,7 +8,9 @@ import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
 import Card from 'react-bootstrap/Card';
 import ButtonGroup from 'react-bootstrap/ButtonGroup';
-import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
+// import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+
 
 function App() {
   const [response, setState] = useState({});
@@ -17,7 +19,6 @@ function App() {
   const port = '10000';
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const socketUrl = `${protocol}//${currentHost}:${port}/`;
-  const httpUrl = `${window.location.protocol}//${currentHost}:${port}/`;
 
   const {
     sendJsonMessage,
@@ -85,14 +86,14 @@ function App() {
     })
   }
 
-  const googleLogin = useGoogleLogin({
-    onSuccess: async ({ code }) => {
-      console.log(code);
-      // Send the code to the server
-      sendJsonMessage({ type: "system", cmd: "update_google_docs_token", prompt: code });
-    },
-    flow: 'auth-code',
-  });
+  // const googleLogin = useGoogleLogin({
+  //   onSuccess: async ({ code }) => {
+  //     console.log(code);
+  //     // Send the code to the server
+  //     sendJsonMessage({ type: "system", cmd: "update_google_docs_token", prompt: code });
+  //   },
+  //   flow: 'auth-code',
+  // });
 
   return (
     <GoogleOAuthProvider clientId="438635256773-rf4rmv51lo436a576enb74t7pc9n8rre.apps.googleusercontent.com">
@@ -120,9 +121,10 @@ function App() {
                         <Button variant="warning" type="button">
                           Stop
                         </Button>
-                        <Button onClick={() => googleLogin()}>
+                        {/* <Button onClick={() => googleLogin()}>
                           Sign in with Google 🚀{' '}
-                        </Button>
+                        </Button> */}
+                        <GoogleLogin onSuccess={code => {console.log(code);}} onError={() => {console.log('Login failed')}}/>
                       </ButtonGroup>
                     </Col>
                   </Row>
