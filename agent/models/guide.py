@@ -312,6 +312,7 @@ def load_vicuna():
 class Guide:
     def __init__(self, default_character: str):
         print("Initialising Guide")
+        self._google_docs_tokens = {}
         self.tools = self._setup_tools()
         # self.guide = guidance.llms.transformers.Vicuna(load_vicuna())
         self.guide = guidance.llms.OpenAI('text-davinci-003')
@@ -389,5 +390,10 @@ class Guide:
             print(f"  No tool found for action '{action}'")
             return self.prompt(query=query, history=f"{self.memory.get_context(session_id=session_id)}\nAction: {action}\nAction Input: {action_input}\nOutcome: No tool found for action '{action}'\n")
 
-    async def update_prompt_template(self, prompt: str, callback: Callable[[str], None], **kwargs) -> None:
+    async def update_prompt_template(self, prompt: str, callback: Callable[[str], None], **kwargs) -> str:
         self._prompt_templates.set(kwargs.get('session_id', 'static'), prompt)
+        return "Done"
+        
+    def update_google_docs_token(self, token: str, **kwargs) -> str:
+        self._google_docs_tokens[kwargs.get('session_id', 'static')] = token
+        return "Done"

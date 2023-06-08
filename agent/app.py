@@ -62,6 +62,7 @@ class API:
                 # {'type': 'prompt', 'prompt': 'prompt text', 'hear_thoughts': True}
                 # {'type': 'system', 'command': 'update_prompt_template', 'prompt': 'new prompt'}
                 # {'type': 'system', 'command': 'update_character', 'prompt': 'new character'}
+                # {'type': 'system', 'command': 'update_google_docs_token', 'prompt': 'new token'}
                 cmd = None
                 if (m.get("type") == 'prompt'):
                     cmd = self.bot.prompt_with_callback
@@ -70,6 +71,8 @@ class API:
                         cmd = self.bot.update_prompt_template
                     if (m.get('command') == 'update_character'):
                         cmd = self.bot.update_character
+                    if (m.get('command') == 'update_google_docs_token'):
+                        cmd = self.bot.update_google_docs_token
                 if cmd:
                     correlation_id=f'{uuid.uuid4()}'
                     def callback(x):

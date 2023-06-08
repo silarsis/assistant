@@ -8,7 +8,7 @@ import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
 import Card from 'react-bootstrap/Card';
 import ButtonGroup from 'react-bootstrap/ButtonGroup';
-import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
 
 function App() {
   const [response, setState] = useState({});
@@ -17,13 +17,14 @@ function App() {
   const port = '10000';
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const socketUrl = `${protocol}//${currentHost}:${port}/`;
+  const httpUrl = `${window.location.protocol}//${currentHost}:${port}/`;
 
   const {
     sendJsonMessage,
   } = useWebSocket(socketUrl, {
     onOpen: () => console.debug('opened'),
     //Will attempt to reconnect on all close events, such as server shutting down
-    shouldReconnect: (closeEvent) => true,
+    shouldReconnect: (_closeEvent: any) => true,
     onMessage: ({ data }) => {
       // console.log(data, typeof data, data.type, data.type !== 'response')
       data = typeof data === 'string' ? JSON.parse(data) : data
@@ -84,6 +85,15 @@ function App() {
     })
   }
 
+  const googleLogin = useGoogleLogin({
+    onSuccess: async ({ code }) => {
+      console.log(code);
+      // Send the code to the server
+      sendJsonMessage({ type: "system", cmd: "update_google_docs_token", prompt: code });
+    },
+    flow: 'auth-code',
+  });
+
   return (
     <GoogleOAuthProvider clientId="438635256773-rf4rmv51lo436a576enb74t7pc9n8rre.apps.googleusercontent.com">
       <Container fluid className="mt-5">
@@ -109,6 +119,9 @@ function App() {
                         </Button>
                         <Button variant="warning" type="button">
                           Stop
+                        </Button>
+                        <Button onClick={() => googleLogin()}>
+                          Sign in with Google 🚀{' '}
                         </Button>
                       </ButtonGroup>
                     </Col>
