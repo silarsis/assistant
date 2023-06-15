@@ -6,13 +6,8 @@ from langchain.tools.file_management.write import WriteFileTool
 from langchain.tools.file_management.read import ReadFileTool
 from models.tools import apify
 from models.tools import web_requests
-from langchain.document_loaders import TextLoader
 
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.llms import OpenAI
-from langchain.chains import RetrievalQA
+from models.codeagent import AzureCodeAgentExplain
 
 from huggingface_hub import hf_hub_download, try_to_load_from_cache
 from typing import List, Optional, Callable
@@ -241,6 +236,7 @@ class Guide:
         tools.append(Tool(name='Answer', func=lambda x: x, description="use when you already know the answer"))
         tools.append(Tool(name='Clarify', func=lambda x: x, description="use when you need more information"))
         tools.append(Tool(name='Request', func=web_requests.scrape_text, description="use when you need to make a request to a website, provide the url as action input"))
+        tools.append(Tool(name='ExplainCode', func=AzureCodeAgentExplain().run, description="use for any coding-related requests, including code generation and explanation"))
         # tools.append(WriteFileTool())
         # tools.append(ReadFileTool())
         if os.environ.get('APIFY_API_TOKEN'):
