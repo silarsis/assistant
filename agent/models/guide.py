@@ -36,9 +36,6 @@ def add_text_to_chat_mode(chat_mode):
 
 _openai.add_text_to_chat_mode = add_text_to_chat_mode
 
-TEMPERATURE = 0.2
-
-
 DEFAULT_PROMPT="""
 {{character}}
 
@@ -65,8 +62,8 @@ Chat History:
 {{await 'history'}}
 
 Human: {{await 'query'}}
-Thought: {{gen 'thought'}}
-Criticism: {{gen 'criticism'}}
+Thought: {{gen 'thought' temperature=0.7}}
+Criticism: {{gen 'criticism' temperature=0.7}}
 Action: {{gen 'action' stop='Action Input:'}}
 Action Input: {{gen 'action_input' stop='Human:'}}
 """
@@ -93,22 +90,21 @@ class LocalMemory:
         self.default_character = default_character
         self._prompt_templates = PromptTemplate(default_character, "Summarise the following conversation, taking the existing context into account:\nContext:\n{{context}}\n\nHistory:{{history}}\n\nSummary:{{gen 'summary'}}")
         
-    def refresh_from(self, session_id: str):
+    def refresh_from(self, session_id: str) -> None:
         self.context.setdefault(session_id, "")
         self.messages.setdefault(session_id, [])
-        return
     
-    def _summarise(self, session_id: str):
+    def _summarise(self, session_id: str) -> str:
         contextualise = self.messages[session_id][:-10]
         if not contextualise:
             return
         self.messages[session_id] = self.messages[session_id][-10:]
         prompt = self._prompt_templates.get(session_id, self.llm)
-        response = prompt(context=self.get_context(), history="\n".join([message["content"] for message in contextualise]))
+        response = prompt(context=self.get_context(session_id), history="\n".join([message["content"] for message in contextualise]))
         print(response['summary'])
         return response['summary']
     
-    def add_message(self, role: str, content: str, session_id: str):
+    def add_message(self, role: str, content: str, session_id: str) -> None:
         self.messages.setdefault(session_id, []).append({"role": role, "content": content})
         if len(self.messages[session_id]) > 20:
             self._summarise(session_id)
@@ -117,7 +113,7 @@ class LocalMemory:
     def get_history(self, session_id) -> List[str]:
         return [message["content"] for message in self.messages.setdefault(session_id, [])]
 
-    def get_formatted_history(self, session_id) -> str:
+    def get_formatted_history(self, session_id: str) -> str:
         history = self.get_history(session_id)
         return "\n".join(history)
     
@@ -223,7 +219,16 @@ class Guide:
         self._google_docs_tokens = {}
         self.tools = self._setup_tools()
         # self.guide = guidance.llms.transformers.Vicuna(load_vicuna())
-        self.guide = guidance.llms.OpenAI('text-davinci-003') # Because we want partial completions
+        # self.guide = guidance.llms.OpenAI('text-davinci-003') # Because we want partial completions
+        self.guide = guidance.llms.OpenAI(
+            'text-davinci-003',
+            api_type='azure',
+            api_key=os.environ.get('OPENAI_API_KEY'),
+            api_base=os.environ.get('OPENAI_API_BASE'),
+            api_version=os.environ.get('OPENAI_API_VERSION'),
+            deployment_id=os.environ.get('OPENAI_DEPLOYMENT_NAME'),
+            caching=False
+        )
         self.memory = Memory(llm=self.guide, default_character=default_character)
         self.default_character = default_character
         self._prompt_templates = PromptTemplate(default_character, DEFAULT_PROMPT)
