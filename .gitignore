@@ -3,3 +3,4 @@ volumes/*
 .env
 **/*.pyc
 **/.venv/
+credentials.json
