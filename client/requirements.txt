@@ -9,3 +9,4 @@ deepgram-sdk
 elevenlabs
 mpv
 ffmpeg
+kivy
