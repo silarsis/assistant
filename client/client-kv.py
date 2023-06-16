@@ -21,6 +21,7 @@ class EchoClient(Widget):
     send_button = ObjectProperty(None)
     message_entry = ObjectProperty(None)
     response_text = ObjectProperty(None)
+    hear_thoughts_button = ObjectProperty(None)
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -114,6 +115,14 @@ class EchoClient(Widget):
             self.listen_button.text="Stop Listening"
             self.listening = True
             self.listen.start_listening()
+            
+    def toggle_hear_thoughts(self):
+        if self.hear_thoughts:
+            self.hear_thoughts_button.text="Hear Thoughts"
+            self.hear_thoughts = False
+        else:
+            self.hear_thoughts_button.text="Stop Hearing Thoughts"
+            self.hear_thoughts = True
 
     @mainthread
     def add_to_response_text(self, message) -> None:
@@ -147,3 +156,6 @@ if __name__ == '__main__':
         c.run()
     except KeyboardInterrupt:
         c.stop()
+    except:
+        c.stop()
+        raise

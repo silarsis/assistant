@@ -8,6 +8,7 @@
     message_entry: message_entry
     session_id_entry: session_id_entry
     response_text: response_text
+    hear_thoughts_button: hear_thoughts_button
     
     StackLayout:
         orientation: 'lr-tb'
@@ -38,8 +39,9 @@
             on_press: root.start_listening()
             size_hint: [0.2, 0.05]
         Button:
+            id: hear_thoughts_button
             text: 'Hear Thoughts'
-            on_press: root.hear_thoughts()
+            on_press: root.toggle_hear_thoughts()
             size_hint: [0.2, 0.05]
         Label:
             text: 'Session ID'
