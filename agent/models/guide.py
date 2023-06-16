@@ -79,6 +79,7 @@ class LocalMemory:
     context: Optional[str] = None
     
     def __init__(self, llm=None, default_character=None):
+        print("Local Memory")
         self.context = {}
         self.messages = {}
         self.llm = llm
@@ -122,6 +123,7 @@ class MotorheadMemory:
     context: Optional[str] = None
     
     def __init__(self, llm=None, default_character=None):
+        print("Motorhead memory")
         self.context = {}
         self.messages = {}
     
@@ -214,16 +216,20 @@ class Guide:
         self._google_docs_tokens = {}
         self.tools = self._setup_tools()
         # self.guide = guidance.llms.transformers.Vicuna(load_vicuna())
-        # self.guide = guidance.llms.OpenAI('text-davinci-003') # Because we want partial completions
-        self.guide = guidance.llms.OpenAI(
-            'text-davinci-003',
-            api_type='azure',
-            api_key=os.environ.get('OPENAI_API_KEY'),
-            api_base=os.environ.get('OPENAI_API_BASE'),
-            api_version=os.environ.get('OPENAI_API_VERSION'),
-            deployment_id=os.environ.get('OPENAI_DEPLOYMENT_NAME'),
-            caching=False
-        )
+        if os.environ.get('OPENAI_API_TYPE') == 'azure':
+            print("Azure")
+            self.guide = guidance.llms.OpenAI(
+                'text-davinci-003',
+                api_type=os.environ.get('OPENAI_API_TYPE'),
+                api_key=os.environ.get('OPENAI_API_KEY'),
+                api_base=os.environ.get('OPENAI_API_BASE'),
+                api_version=os.environ.get('OPENAI_API_VERSION'),
+                deployment_id=os.environ.get('OPENAI_DEPLOYMENT_NAME'),
+                caching=False
+            )
+        else:
+            print("OpenAI")
+            self.guide = guidance.llms.OpenAI('text-davinci-003') # Because we want partial completions
         self.memory = Memory(llm=self.guide, default_character=default_character)
         self.default_character = default_character
         self._prompt_templates = PromptTemplate(default_character, DEFAULT_PROMPT)
