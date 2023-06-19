@@ -45,6 +45,14 @@ def getLLM(model: str = 'text-davinci-003'):
         print("OpenAI")
         return guidance.llms.OpenAI(model)
     
+DEFAULT_CHARACTER="""
+You are an AI assistant.
+Your name is Echo.
+You are designed to be helpful, but you are also a bit of a smartass. You don't have to be polite.
+Your goal is to provide the user with answers to their questions and sometimes make them laugh.
+Use Markdown formatting in your answers where appropriate.
+You should answer in a personalised way, not too formal, and not always polite.
+"""
 
 DEFAULT_PROMPT="""
 {{character}}
@@ -283,7 +291,6 @@ class Guide:
         # Select the tool to use
         (action, action_input) = self.tool_selector.select(query=query, session_id=session_id)
         print(f"Action: {action}\nAction Input: {action_input}\n")
-        # self.memory.add_message(role="AI", content=f"Action: {action}\nAction Input: {action_input}\n", session_id=session_id)
         # Clarify should probably actually do something interesting with the history or something
         if action in ('Answer', 'Clarify'):
             # This represents a completed answer
@@ -293,6 +300,7 @@ class Guide:
                 query, 
                 session_id=session_id
             )
+            self.memory.add_message(role="AI", content=f"Action: {action}\nAction Input: {response}\n", session_id=session_id)
             print(f"Thought: {thought}\nResponse: {response}\n")
             if interim and hear_thoughts:
                 interim(f"\nThought: {thought}.\n")
@@ -310,9 +318,9 @@ class Guide:
                 tool_output = "This tool failed to run"
             self.memory.add_message(role="AI", content=f"Outcome: {tool_output}", session_id=session_id)
             response = self._get_tool_response_prompt_template(session_id)(query=query, tool_output=tool_output)
-            self.memory.add_message(role="AI", content=f"Action: Answer\nAction Input: {response['answer']}\n", session_id=session_id)
-            print(f"  Response: {response['answer']}")
-            return self.character_adder.reword(query, response['answer'], session_id=session_id)
+            reworded_response = self.character_adder.reword(query, response['answer'], session_id=session_id)
+            self.memory.add_message(role="AI", content=f"Action: Answer\nAction Input: {reworded_response}\n", session_id=session_id)
+            return reworded_response
         else:
             print(f"  No tool found for action '{action}'")
             return self.prompt(
@@ -330,14 +338,7 @@ class Guide:
     
 class AddCharacter:
     " Designed to run over the results of any query and add character to the response "
-    character = """
-You are an AI assistant.
-Your name is Echo.
-You are designed to be helpful, but you are also a bit of a smartass. You don't have to be polite.
-Your goal is to provide the user with answers to their questions and sometimes make them laugh.
-Use Markdown formatting in your answers where appropriate.
-You should answer in a personalised way, not too formal.
-"""
+    character = DEFAULT_CHARACTER
     prompt = """
 You were asked the following question:
 {{await 'query'}}
@@ -396,14 +397,7 @@ The tool input is: {{gen 'tool_input'}}
     
 class DirectResponse:
     " Designed to answer a question directly "
-    character = """
-You are an AI assistant.
-Your name is Echo.
-You are designed to be helpful, but you are also a bit of a smartass. You don't have to be polite.
-Your goal is to provide the user with answers to their questions and sometimes make them laugh.
-Use Markdown formatting in your answers where appropriate.
-You should answer in a personalised way, not too formal, and not always polite.
-"""
+    character = DEFAULT_CHARACTER
     prompt = """
 {{character}}
 
