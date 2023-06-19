@@ -1,5 +1,4 @@
 import os
-import pyttsx3
 from playsound import playsound, PlaysoundException
 import queue
 import threading
@@ -13,22 +12,34 @@ TIMEOUT = 2
 class ElevenLabs:
     def __init__(self):
         elevenlabs.set_api_key(os.environ.get('ELEVENLABS_API_KEY'))
-        self._headers = {
-            'Content-Type': 'application/json',
-            'xi-api-key': os.environ.get('ELEVENLABS_API_KEY')
-        }
+        # self._headers = {
+        #     'Content-Type': 'application/json',
+        #     'xi-api-key': os.environ.get('ELEVENLABS_API_KEY')
+        # }
         self._voices = [os.environ.get('ELEVENLABS_VOICE_1_ID'), os.environ.get('ELEVENLABS_VOICE_2_ID')]
+        self._stream = True
         
-    def say(self, text: str):
-        print("Requesting TTS", flush=True)
-        audio_stream = elevenlabs.generate(text=f'... ... ... {text}', voice=self._voices[0])
-        # elevenlabs.play(audio_stream)
-        elevenlabs.save(audio=audio_stream, filename="speech.mpeg")
+    def _save_and_say(self, audio_stream, filename="speech.mpeg"):
+        elevenlabs.save(audio=audio_stream, filename=filename)
         try:
             playsound("speech.mpeg", True)
         except PlaysoundException:
             print("Failed to play sound", flush=True)
         os.remove("speech.mpeg")
+        
+        
+    def say(self, text: str):
+        print("Requesting TTS", flush=True)
+        audio_stream = elevenlabs.generate(text=f'... ... ... {text}', voice=self._voices[0])
+        if self._stream:
+            try:
+                elevenlabs.stream(audio_stream)
+            except ValueError:
+                # Raised if mpv can't be found
+                self._stream = False
+                self._save_and_say(audio_stream)
+        else:
+            self._save_and_say(audio_stream)
         return True
 
         
