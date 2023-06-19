@@ -1,6 +1,5 @@
 import os
 import pyttsx3
-import requests
 from playsound import playsound, PlaysoundException
 import queue
 import threading
@@ -35,9 +34,12 @@ class ElevenLabs:
         
 class TTS:
     def __init__(self):
-        self.engine = pyttsx3.init()
+        print("No supported text to speech currently, setup an elevenlabs account and set ELEVENLABS_API_KEY in .env")
+        # self.engine = pyttsx3.init() # This segfaults on Mac python > 3.6.15
+        self.engine = None
         
     def say(self, text: str):
+        return
         self.engine.say(text)
         self.engine.runAndWait()
         
