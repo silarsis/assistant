@@ -2,10 +2,11 @@
 from langchain.agents import Tool
 from langchain.utilities import GoogleSearchAPIWrapper
 from langchain.utilities.wolfram_alpha import WolframAlphaAPIWrapper
-from langchain.tools.file_management.write import WriteFileTool
-from langchain.tools.file_management.read import ReadFileTool
+# from langchain.tools.file_management.write import WriteFileTool
+# from langchain.tools.file_management.read import ReadFileTool
 from models.tools import apify
 from models.tools import web_requests
+from models.tools.google_docs import GoogleDocLoader
 
 from models.codeagent import AzureCodeAgentExplain
 
@@ -51,7 +52,7 @@ Your name is Echo.
 You are designed to be helpful, but you are also a bit of a smartass. You don't have to be polite.
 Your goal is to provide the user with answers to their questions and sometimes make them laugh.
 Use Markdown formatting in your answers where appropriate.
-You should answer in a personalised way, not too formal, and not always polite.
+You should answer in a personalised way, not too formal, concise, and not always polite.
 """
 
 DEFAULT_PROMPT="""
@@ -236,7 +237,6 @@ def load_vicuna():
 class Guide:
     def __init__(self, default_character: str):
         print("Initialising Guide")
-        self._google_docs_tokens = {}
         self.tools = self._setup_tools()
         # self.guide = guidance.llms.transformers.Vicuna(load_vicuna())
         self.guide = getLLM()
@@ -245,6 +245,7 @@ class Guide:
         self._prompt_templates = PromptTemplate(default_character, DEFAULT_PROMPT)
         self._tool_response_prompt_templates = PromptTemplate(default_character, DEFAULT_TOOL_PROMPT)
         self.tool_selector = ToolSelector(self.tools, self.guide)
+        self._google_docs = GoogleDocLoader()
         self.character_adder = AddCharacter(self.guide)
         self.direct_responder = DirectResponse(self.guide)
         print("Guide initialised")
@@ -254,10 +255,11 @@ class Guide:
         tools = []
         tools.append(Tool(name='Answer', func=lambda x: x, description="use when you already know the answer"))
         tools.append(Tool(name='Clarify', func=lambda x: x, description="use when you need more information"))
-        tools.append(Tool(name='Request', func=web_requests.scrape_text, description="use when you need to make a request to a website, provide the url as action input"))
+        tools.append(Tool(name='Request', func=web_requests.scrape_text, description="use to make a request to a website, provide the url as action input"))
         tools.append(Tool(name='ExplainCode', func=AzureCodeAgentExplain().run, description="use for any coding-related requests, including code generation and explanation"))
         # tools.append(WriteFileTool())
         # tools.append(ReadFileTool())
+        tools.append(Tool(name='LoadDocument', func=self.google_doc_load, description="use to load a document, provide the document id as action input"))
         if os.environ.get('APIFY_API_TOKEN'):
             self.apify = apify.ApifyTool()
             tools.append(Tool(name='Scrape', func=self.apify.scrape_website, description="use when you need to scrape a website, provide the url as action input"))
@@ -316,6 +318,7 @@ class Guide:
                 print("  tool raised an exception")
                 print(e)
                 tool_output = "This tool failed to run"
+            print(f"Tool Output: {tool_output}\n")
             self.memory.add_message(role="AI", content=f"Outcome: {tool_output}", session_id=session_id)
             response = self._get_tool_response_prompt_template(session_id)(query=query, tool_output=tool_output)
             reworded_response = self.character_adder.reword(query, response['answer'], session_id=session_id)
@@ -333,7 +336,7 @@ class Guide:
         return "Done"
         
     def update_google_docs_token(self, token: str, **kwargs) -> str:
-        self._google_docs_tokens[kwargs.get('session_id', 'static')] = token
+        self._google_docs.set_token(token, session_id=kwargs.get('session_id', 'static'))
         return "Done"
     
 class AddCharacter:
