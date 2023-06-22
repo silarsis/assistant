@@ -59,4 +59,10 @@ Other projects that have been an inspiration include:
 
 * Build the app out to be a basic web interface for chat, and make that interface easy to use as an API
 * Need to decide on the base model and how it gets accessed - look at app/ for the challenge
-* 
+
+
+
+Google docs notes:
+
+https://python.langchain.com/docs/modules/data_connection/document_loaders/integrations/google_drive
+
