@@ -5,6 +5,7 @@ from kivy.app import App
 from kivy.uix.widget import Widget
 from kivy.properties import ObjectProperty
 from kivy.clock import mainthread
+import google_auth_oauthlib
 
 from talk import Talk
 from listen import Listen
@@ -67,16 +68,9 @@ class EchoClient(Widget):
             except TypeError: # NoneType is not iterable
                 self.closed_connection()
                 return
-
-    def send(self):
-        message = self.message_entry.text
-        if not message:
-            print("Nothing to send, not sending")
-            return
-        session_id = self.session_id_entry.text
-        if not session_id:
-            session_id = 'client'
-        json_message = {'prompt':message, 'type':'prompt', 'session_id':session_id}
+            
+    def _actual_send(self, type='prompt', prompt='', command='', session_id=''):
+        json_message = {'type':type, 'prompt':prompt, 'command':command, 'session_id':session_id}
         if self.hear_thoughts:
             json_message['hear_thoughts'] = True
         attempts = 0
@@ -90,6 +84,13 @@ class EchoClient(Widget):
             # Executed if we don't break out of the loop
             self.closed_connection()
             return
+
+    def send(self):
+        message = self.message_entry.text
+        if not message:
+            print("Nothing to send, not sending")
+            return
+        self._actual_send(type='prompt', prompt=message, session_id=self.session_id)
         self.response_text.text = ''
 
     def closed_connection(self):
@@ -142,6 +143,16 @@ class EchoClient(Widget):
         self.listen.quit()
         self.talk.quit()
         self.closed_connection()
+        
+    def google_login(self):
+        with open('credentials.json') as f:
+            client_secret = json.load(f)
+        self._credentials = google_auth_oauthlib.get_user_credentials(
+            ["https://www.googleapis.com/auth/drive.readonly"], 
+            client_secret['installed']['client_id'], 
+            client_secret['installed']['client_secret'])
+        {'type': 'system', 'command': 'update_google_docs_token', 'prompt': 'new token'}
+        self._actual_send(type='system', command='update_google_docs_token', prompt=self._credentials)
 
 class ClientApp(App):
     def build(self):

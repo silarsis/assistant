@@ -12,10 +12,6 @@ TIMEOUT = 2
 class ElevenLabs:
     def __init__(self):
         elevenlabs.set_api_key(os.environ.get('ELEVENLABS_API_KEY'))
-        # self._headers = {
-        #     'Content-Type': 'application/json',
-        #     'xi-api-key': os.environ.get('ELEVENLABS_API_KEY')
-        # }
         self._voices = [os.environ.get('ELEVENLABS_VOICE_1_ID'), os.environ.get('ELEVENLABS_VOICE_2_ID')]
         self._stream = True
         
@@ -30,7 +26,8 @@ class ElevenLabs:
         
     def say(self, text: str):
         print("Requesting TTS", flush=True)
-        audio_stream = elevenlabs.generate(text=f'... ... ... {text}', voice=self._voices[0])
+        audio_stream = elevenlabs.generate(text=f'... ... ... {text}', voice=self._voices[0], stream=True)
+        # elevenlabs.play(audio_stream)
         if self._stream:
             try:
                 elevenlabs.stream(audio_stream)
