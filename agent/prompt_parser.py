@@ -15,3 +15,6 @@ class Parser:
     def prompt(self, prompt: str, **kwargs) -> str:
         print(f"Prompting with {prompt}", flush=True)
         return self.agent.prompt(prompt, **kwargs)
+    
+    async def update_google_docs_token(self, token: str, callback: Callable[[str], None], **kwargs) -> str:
+        await self.agent.update_google_docs_token(token, callback=callback, **kwargs)
