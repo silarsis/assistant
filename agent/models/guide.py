@@ -4,6 +4,7 @@ from langchain.utilities import GoogleSearchAPIWrapper
 from langchain.utilities.wolfram_alpha import WolframAlphaAPIWrapper
 # from langchain.tools.file_management.write import WriteFileTool
 # from langchain.tools.file_management.read import ReadFileTool
+from langchain import OpenAI
 from models.tools import apify
 from models.tools import web_requests
 from models.tools.google_docs import GoogleDocLoader
@@ -15,6 +16,7 @@ from typing import List, Optional, Callable
 import guidance
 import requests
 import os
+import json
 
 ## Monkey patch
 from guidance.llms import _openai
@@ -90,11 +92,12 @@ Action Input: {{gen 'action_input' stop='Human:'}}
 DEFAULT_TOOL_PROMPT = """
 {{character}}
 
-Given the following information:
+You called the {{tool}} tool to answer the query '{{query}}'.
+The {{tool}} tool returned the following answer:
 
 {{tool_output}}
 
-The answer to the question '{{query}}' is:
+Please reword this answer in your own words, and add any additional information you think is relevant.
 
 {{gen 'answer'}}
 """
@@ -237,15 +240,15 @@ def load_vicuna():
 class Guide:
     def __init__(self, default_character: str):
         print("Initialising Guide")
+        self.guide = getLLM()
+        self._google_docs = GoogleDocLoader(llm=OpenAI(temperature=0.4))
         self.tools = self._setup_tools()
         # self.guide = guidance.llms.transformers.Vicuna(load_vicuna())
-        self.guide = getLLM()
         self.memory = Memory(llm=self.guide, default_character=default_character)
         self.default_character = default_character
         self._prompt_templates = PromptTemplate(default_character, DEFAULT_PROMPT)
         self._tool_response_prompt_templates = PromptTemplate(default_character, DEFAULT_TOOL_PROMPT)
         self.tool_selector = ToolSelector(self.tools, self.guide)
-        self._google_docs = GoogleDocLoader()
         self.character_adder = AddCharacter(self.guide)
         self.direct_responder = DirectResponse(self.guide)
         print("Guide initialised")
@@ -259,7 +262,7 @@ class Guide:
         tools.append(Tool(name='ExplainCode', func=AzureCodeAgentExplain().run, description="use for any coding-related requests, including code generation and explanation"))
         # tools.append(WriteFileTool())
         # tools.append(ReadFileTool())
-        tools.append(Tool(name='LoadDocument', func=self.google_doc_load, description="use to load a document, provide the document id as action input"))
+        tools.append(Tool(name='LoadDocument', func=self._google_docs.load_doc, description="use to load a document, provide the document id as action input"))
         if os.environ.get('APIFY_API_TOKEN'):
             self.apify = apify.ApifyTool()
             tools.append(Tool(name='Scrape', func=self.apify.scrape_website, description="use when you need to scrape a website, provide the url as action input"))
@@ -313,14 +316,14 @@ class Guide:
             # Call the tool, include the output into the history and then recall the prompt
             print(f"  Calling {tool.name} with input {action_input}")
             try:
-                tool_output = tool.func(action_input)
+                tool_output = tool.func(action_input, session_id=session_id, interim=interim)
             except Exception as e:
                 print("  tool raised an exception")
                 print(e)
                 tool_output = "This tool failed to run"
             print(f"Tool Output: {tool_output}\n")
             self.memory.add_message(role="AI", content=f"Outcome: {tool_output}", session_id=session_id)
-            response = self._get_tool_response_prompt_template(session_id)(query=query, tool_output=tool_output)
+            response = self._get_tool_response_prompt_template(session_id)(query=query, tool=tool.name, tool_output=tool_output)
             reworded_response = self.character_adder.reword(query, response['answer'], session_id=session_id)
             self.memory.add_message(role="AI", content=f"Action: Answer\nAction Input: {reworded_response}\n", session_id=session_id)
             return reworded_response
@@ -333,11 +336,11 @@ class Guide:
 
     async def update_prompt_template(self, prompt: str, callback: Callable[[str], None], **kwargs) -> str:
         self._prompt_templates.set(kwargs.get('session_id', 'static'), prompt)
-        return "Done"
+        callback("Done")
         
-    def update_google_docs_token(self, token: str, **kwargs) -> str:
-        self._google_docs.set_token(token, session_id=kwargs.get('session_id', 'static'))
-        return "Done"
+    async def update_google_docs_token(self, token: str, callback: Callable[[str], None], session_id: str ='', **kwargs) -> str:
+        self._google_docs.set_token(json.loads(token), session_id=session_id)
+        callback("Authenticated")
     
 class AddCharacter:
     " Designed to run over the results of any query and add character to the response "
