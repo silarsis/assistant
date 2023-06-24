@@ -26,7 +26,7 @@ class ElevenLabs:
         
     def say(self, text: str):
         print("Requesting TTS", flush=True)
-        audio_stream = elevenlabs.generate(text=f'... ... ... {text}', voice=self._voices[0], stream=True)
+        audio_stream = elevenlabs.generate(text=f'... ... ... {text}', voice=self._voices[0], stream=self._stream)
         # elevenlabs.play(audio_stream)
         if self._stream:
             try:
@@ -34,7 +34,7 @@ class ElevenLabs:
             except ValueError:
                 # Raised if mpv can't be found
                 self._stream = False
-                self._save_and_say(audio_stream)
+                self.say(text)
         else:
             self._save_and_say(audio_stream)
         return True
