@@ -44,6 +44,7 @@ class EchoClient(Widget):
             self.send_button.disabled = False
             thread = threading.Thread(target=self.receive_messages)
             thread.start()
+            self.google_login()
         except Exception as e:
             print(f"Failed to connect to {uri}: {e}")
             self.closed_connection()
@@ -69,8 +70,8 @@ class EchoClient(Widget):
                 self.closed_connection()
                 return
             
-    def _actual_send(self, type='prompt', prompt='', command='', session_id=''):
-        json_message = {'type':type, 'prompt':prompt, 'command':command, 'session_id':session_id}
+    def _actual_send(self, type='prompt', prompt='', command=''):
+        json_message = {'type':type, 'prompt':prompt, 'command':command, 'session_id':self.session_id}
         if self.hear_thoughts:
             json_message['hear_thoughts'] = True
         attempts = 0
@@ -90,7 +91,7 @@ class EchoClient(Widget):
         if not message:
             print("Nothing to send, not sending")
             return
-        self._actual_send(type='prompt', prompt=message, session_id=self.session_id)
+        self._actual_send(type='prompt', prompt=message)
         self.response_text.text = ''
 
     def closed_connection(self):
@@ -148,11 +149,15 @@ class EchoClient(Widget):
         with open('credentials.json') as f:
             client_secret = json.load(f)
         self._credentials = google_auth_oauthlib.get_user_credentials(
-            ["https://www.googleapis.com/auth/drive.readonly"], 
+            ["https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/documents.readonly"], 
             client_secret['installed']['client_id'], 
             client_secret['installed']['client_secret'])
         {'type': 'system', 'command': 'update_google_docs_token', 'prompt': 'new token'}
-        self._actual_send(type='system', command='update_google_docs_token', prompt=self._credentials)
+        self._actual_send(
+            type='system', 
+            command='update_google_docs_token', 
+            prompt=self._credentials.to_json()
+        )
 
 class ClientApp(App):
     def build(self):
