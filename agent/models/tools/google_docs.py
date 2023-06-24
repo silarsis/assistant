@@ -17,7 +17,6 @@ class GoogleDocLoader:
             embedding_function=embeddings, 
             connection_args={'host':MILVUS_HOST, 'port':MILVUS_PORT})
         self._llm = llm
-        print(type(self._llm))
         
     def set_token(self, token: dict, session_id: str = 'static') -> str: # TODO: This isn't token, this is credentials object
         self._tokens[session_id] = Credentials.from_authorized_user_info(token)
@@ -27,7 +26,9 @@ class GoogleDocLoader:
         for value in elements:
             if 'paragraph' in value:
                 for elem in value.get('paragraph').get('elements'):
-                    text.append(elem.get('textRun', {}).get('content', ''))
+                    t = elem.get('textRun', {}).get('content', '')
+                    if t:
+                        text.append(t)
             elif 'table' in value:
                 # The text in table cells are in nested Structural Elements and tables may be
                 # nested.
