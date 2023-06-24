@@ -97,7 +97,7 @@ The {{tool}} tool returned the following answer:
 
 {{tool_output}}
 
-Please reword this answer in your own words, and add any additional information you think is relevant.
+Please reword this answer to match your character, and add any additional information you think is relevant.
 
 {{gen 'answer'}}
 """
@@ -324,9 +324,9 @@ class Guide:
             print(f"Tool Output: {tool_output}\n")
             self.memory.add_message(role="AI", content=f"Outcome: {tool_output}", session_id=session_id)
             response = self._get_tool_response_prompt_template(session_id)(query=query, tool=tool.name, tool_output=tool_output)
-            reworded_response = self.character_adder.reword(query, response['answer'], session_id=session_id)
-            self.memory.add_message(role="AI", content=f"Action: Answer\nAction Input: {reworded_response}\n", session_id=session_id)
-            return reworded_response
+            # reworded_response = self.character_adder.reword(query, response['answer'], session_id=session_id)
+            self.memory.add_message(role="AI", content=f"Action: Answer\nAction Input: {response['answer']}\n", session_id=session_id)
+            return response['answer']
         else:
             print(f"  No tool found for action '{action}'")
             return self.prompt(
@@ -346,6 +346,8 @@ class AddCharacter:
     " Designed to run over the results of any query and add character to the response "
     character = DEFAULT_CHARACTER
     prompt = """
+{{character}}
+    
 You were asked the following question:
 {{await 'query'}}
 
