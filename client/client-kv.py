@@ -26,6 +26,7 @@ class EchoClient(Widget):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._credentials = None
         self._ending = False
         self.websocket = None
         self.hear_thoughts = False
@@ -146,13 +147,13 @@ class EchoClient(Widget):
         self.closed_connection()
         
     def google_login(self):
-        with open('credentials.json') as f:
-            client_secret = json.load(f)
-        self._credentials = google_auth_oauthlib.get_user_credentials(
-            ["https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/documents.readonly"], 
-            client_secret['installed']['client_id'], 
-            client_secret['installed']['client_secret'])
-        {'type': 'system', 'command': 'update_google_docs_token', 'prompt': 'new token'}
+        if not self._credentials:
+            with open('credentials.json') as f:
+                client_secret = json.load(f)
+            self._credentials = google_auth_oauthlib.get_user_credentials(
+                ["https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/documents.readonly"], 
+                client_secret['installed']['client_id'], 
+                client_secret['installed']['client_secret'])
         self._actual_send(
             type='system', 
             command='update_google_docs_token', 
