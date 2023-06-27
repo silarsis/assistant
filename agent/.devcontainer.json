@@ -1,7 +1,7 @@
 {
-    "name": "webui",
+    "name": "agent",
     "dockerComposeFile": ["../docker-compose.yml", "../docker-compose-dev.yml"],
-    "service": "webui",
+    "service": "agent",
     "shutdownAction": "none",
     "workspaceFolder": "/app"
   }

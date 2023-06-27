@@ -3,7 +3,8 @@ FROM node
 EXPOSE 3000
 
 WORKDIR /app
-COPY client .
+COPY . .
+WORKDIR /app/client
 
 # Temporary hack fix for SSL intercept on some machines
 RUN npm config set strict-ssl false && npm install
