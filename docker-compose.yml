@@ -103,9 +103,9 @@ services:
     container_name: motorhead
     image: ghcr.io/getmetal/motorhead:latest
     ports:
-      - "8080:8080"
+      - "8001:8001"
     environment:
-      - PORT=8080
+      - PORT=8001
       - REDIS_URL=redis://redis:6379
       - MOTORHEAD_LONG_TERM_MEMORY=True
       - OPENAI_API_KEY
@@ -129,9 +129,10 @@ services:
   tts:
     container_name: tts
     image: ghcr.io/coqui-ai/tts-cpu:latest
+    entrypoint: python3 TTS/server/server.py --model_name tts_models/en/vctk/vits
     ports:
       - "5002:5002"
-      
+
 volumes:
   redis:
     driver: local
