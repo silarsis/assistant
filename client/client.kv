@@ -9,7 +9,6 @@
     session_id_entry: session_id_entry
     response_text: response_text
     hear_thoughts_button: hear_thoughts_button
-    google_login_button: google_login_button
     
     StackLayout:
         orientation: 'lr-tb'
@@ -80,9 +79,3 @@
             id: response_text
             text: ''
             size_hint: [1, 0.4]
-            
-        Button:
-            id: google_login_button
-            text: 'Google Login'
-            size_hint: [0.2, 0.1]
-            on_press: root.google_login()
