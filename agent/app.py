@@ -9,6 +9,9 @@ from prompt_parser import Parser
 import nest_asyncio
 import uuid
 from dotenv import load_dotenv
+import logging
+
+logging.disable(logging.DEBUG)
 
 load_dotenv()
 nest_asyncio.apply()
