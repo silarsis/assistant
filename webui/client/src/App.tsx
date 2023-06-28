@@ -63,6 +63,10 @@ function App() {
     sendJsonMessage({ ...data, type: "prompt" })
   }
 
+  function loginToBackend(token: any) {
+    sendJsonMessage({type: "system", command: "update_google_docs_token", prompt: JSON.stringify(token)})
+  }
+
   function clear() {
     setState(state => ({}))
   }
@@ -84,6 +88,37 @@ function App() {
       return newState
     })
   }
+
+  // const googleLogin = useGoogleLogin({
+  //   flow: 'auth-code',
+  //   onSuccess: async (codeResponse) => {
+  //       console.log(codeResponse);
+  //       const tokens = await axios.post(
+  //           'http://localhost:3001/auth/google', {
+  //               code: codeResponse.code,
+  //           });
+
+  //       console.log(tokens);
+  //   },
+  //   onError: errorResponse => console.log(errorResponse),
+  // });
+
+  // const client = google.accounts.oauth2.initCodeClient({
+  //   client_id: process.env.CLIENT_ID,
+  //   scope: "https://www.googleapis.com/auth/documents.readonly",
+  //   ux_mode: 'popup',
+  //   callback: (response) => {
+  //     const xhr = new XMLHttpRequest();
+  //     xhr.open('POST', code_receiver_uri, true);
+  //     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+  //     // Set custom header for CRSF
+  //     xhr.setRequestHeader('X-Requested-With', 'XmlHttpRequest');
+  //     xhr.onload = function() {
+  //       console.log('Auth code response: ' + xhr.responseText);
+  //     };
+  //     xhr.send('code=' + response.code);
+  //   },
+  // });
 
   return (
       <Container fluid className="mt-5">
@@ -110,7 +145,7 @@ function App() {
                         <Button variant="warning" type="button">
                           Stop
                         </Button>
-                        <GoogleLogin onSuccess={(code) => {console.log(code);}} onError={(error) => {console.log(error)}}/>
+                        <GoogleLogin onSuccess={(code) => {loginToBackend(code);}} onError={() => {console.log('error')}} />
                       </ButtonGroup>
                     </Col>
                   </Row>
