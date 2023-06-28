@@ -7,6 +7,7 @@ from langchain.chains.summarize import load_summarize_chain
 from langchain.docstore.document import Document
 
 from pymilvus import utility, Collection, connections
+import base64
 
 MILVUS_HOST = 'milvus'
 MILVUS_PORT = 19530
@@ -45,7 +46,7 @@ class GoogleDocLoader:
         return text
     
     def _cache_key(self, docid: str) -> str:
-        return f"gdoc_{docid}"
+        return f"gdoc_{base64.b64encode(docid)}"
     
     def _vector_store(self, collection_name: str = 'LangChainCollection') -> Milvus:
         cache_key = self._cache_key(collection_name)
