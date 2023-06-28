@@ -13,6 +13,9 @@ from listen import Listen
 import threading
 import json
 
+import logging
+logging.disable(logging.DEBUG)
+
 kivy.require('2.2.0')
 
 class EchoClient(Widget):
