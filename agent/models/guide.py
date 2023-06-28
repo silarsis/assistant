@@ -145,7 +145,7 @@ class LocalMemory:
         return self.context.setdefault(session_id, "")
 
 class MotorheadMemory:
-    url: str = "http://motorhead:8080"
+    url: str = "http://motorhead:8001"
     timeout = 3000
     memory_key = "history"
     context: Optional[str] = None

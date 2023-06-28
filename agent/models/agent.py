@@ -124,7 +124,7 @@ def get_llm():
 
 class Agent:
     def __init__(self, character: str):
-        memory = MotorheadMemory(session_id="static", memory_key="history", url="http://motorhead:8080")
+        memory = MotorheadMemory(session_id="static", memory_key="history", url="http://motorhead:8001")
         memory.init()
         # memory = ConversationBufferWindowMemory(memory_key="history", k=20)
         tools = self._setup_tools()
