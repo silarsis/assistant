@@ -17,6 +17,7 @@ import guidance
 import requests
 import os
 import json
+from pydantic import create_model
 
 ## Monkey patch
 from guidance.llms import _openai
@@ -262,7 +263,7 @@ class Guide:
         tools.append(Tool(name='ExplainCode', func=AzureCodeAgentExplain().run, description="use for any coding-related requests, including code generation and explanation"))
         # tools.append(WriteFileTool())
         # tools.append(ReadFileTool())
-        tools.append(Tool(name='LoadDocument', func=self._google_docs.load_doc, description="use to load a document, provide the document id as action input"))
+        tools.append(Tool(name='LoadDocument', func=self._google_docs.load_doc, description="use to load a document, provide the document id as action input", args_schema=create_model('LoadDocumentModel', tool_input='', session_id='')))
         if os.environ.get('APIFY_API_TOKEN'):
             self.apify = apify.ApifyTool()
             tools.append(Tool(name='Scrape', func=self.apify.scrape_website, description="use when you need to scrape a website, provide the url as action input"))
@@ -285,6 +286,20 @@ class Guide:
     async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], **kwargs) -> None:
         response = self.prompt(query=prompt, interim=callback, hear_thoughts=kwargs.get('hear_thoughts', False), session_id=kwargs.get('session_id', 'static'))
         return callback(response)
+    
+    def _call_tool(self, tool, action_input: str, session_id: str) -> str:
+        print(f"  Calling {tool.name} with input {action_input}")
+        kwargs = {}
+        if tool.args_schema and 'session_id' in json.loads(tool.args_schema.schema_json())['properties']:
+            kwargs['session_id'] = session_id
+        try:
+            tool_output = tool.func(action_input, **kwargs)
+        except Exception as e:
+            print("  tool raised an exception")
+            print(e)
+            tool_output = "This tool failed to run"
+        print(f"Tool Output: {tool_output}\n")
+        return tool_output
     
     def prompt(self, query: str, history: str="", interim: Optional[Callable[[str], None]]=None, **kwargs) -> str:
         session_id = kwargs.get('session_id', 'static')
@@ -313,15 +328,7 @@ class Guide:
         print(f"Looking for tool for action '{action}'")
         tool = next((tool for tool in self.tools if tool.name.lower() == action.lower()), None)
         if tool:
-            # Call the tool, include the output into the history and then recall the prompt
-            print(f"  Calling {tool.name} with input {action_input}")
-            try:
-                tool_output = tool.func(action_input, session_id=session_id, interim=interim)
-            except Exception as e:
-                print("  tool raised an exception")
-                print(e)
-                tool_output = "This tool failed to run"
-            print(f"Tool Output: {tool_output}\n")
+            tool_output = self._call_tool(tool, action_input, session_id)
             self.memory.add_message(role="AI", content=f"Outcome: {tool_output}", session_id=session_id)
             response = self._get_tool_response_prompt_template(session_id)(query=query, tool=tool.name, tool_output=tool_output)
             # reworded_response = self.character_adder.reword(query, response['answer'], session_id=session_id)
