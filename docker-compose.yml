@@ -99,39 +99,39 @@ services:
       - "etcd"
       - "minio"
 
-  # motorhead: # Memory
-  #   container_name: motorhead
-  #   image: ghcr.io/getmetal/motorhead:latest
-  #   ports:
-  #     - "8080:8080"
-  #   environment:
-  #     - PORT=8080
-  #     - REDIS_URL=redis://redis:6379
-  #     - MOTORHEAD_LONG_TERM_MEMORY=True
-  #     - OPENAI_API_KEY
-  #     - OPENAI_API_TYPE
-  #     - OPENAI_API_BASE
-  #     - OPENAI_API_VERSION
-  #     - OPENAI_DEPLOYMENT_NAME
-  #   depends_on:
-  #     - "redis"
+  motorhead: # Memory
+    container_name: motorhead
+    image: ghcr.io/getmetal/motorhead:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - REDIS_URL=redis://redis:6379
+      - MOTORHEAD_LONG_TERM_MEMORY=True
+      - OPENAI_API_KEY
+      - OPENAI_API_TYPE
+      - OPENAI_API_BASE
+      - OPENAI_API_VERSION
+      - OPENAI_DEPLOYMENT_NAME
+    depends_on:
+      - "redis"
 
-  # redis:
-  #   container_name: redis
-  #   image: redis/redis-stack:latest
-  #   restart: always
-  #   ports:
-  #     - '6379:6379'
-  #   volumes: 
-  #     - redis:/data
-
-# volumes:
-#   redis:
-#     driver: local
+  redis:
+    container_name: redis
+    image: redis/redis-stack:latest
+    restart: always
+    ports:
+      - '6379:6379'
+    volumes: 
+      - redis:/data
 
 # https://tts.readthedocs.io/en/latest/
-  # tts:
-  #   container_name: tts
-  #   image: ghcr.io/coqui-ai/tts-cpu:latest
-  #   ports:
-  #     - "5002:5002"
+  tts:
+    container_name: tts
+    image: ghcr.io/coqui-ai/tts-cpu:latest
+    ports:
+      - "5002:5002"
+      
+volumes:
+  redis:
+    driver: local
