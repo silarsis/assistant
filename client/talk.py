@@ -7,6 +7,7 @@ import elevenlabs
 import requests
 import pyaudio
 import wave
+from urllib.parse import quote
 
 load_dotenv()
 
@@ -45,7 +46,8 @@ class ElevenLabs:
 
 class TTS:
     def say(self, text: str):
-        with requests.get(f"http://localhost:5002/api/tts?text={text}&speaker_id=p243&style_wav=&language_id=", stream=True) as wav:
+        q_text = quote(text)
+        with requests.get(f"http://localhost:5002/api/tts?text={q_text}&speaker_id=p364&style_wav=&language_id=", stream=True) as wav:
             p = pyaudio.PyAudio()
             
             wf = wave.Wave_read(wav.raw)
