@@ -4,10 +4,14 @@ import queue
 import threading
 from dotenv import load_dotenv
 import elevenlabs
+import requests
+import pyaudio
+import wave
 
 load_dotenv()
 
 TIMEOUT = 2
+CHUNK = 1024
 
 class ElevenLabs:
     def __init__(self):
@@ -39,17 +43,21 @@ class ElevenLabs:
             self._save_and_say(audio_stream)
         return True
 
-        
 class TTS:
-    def __init__(self):
-        print("No supported text to speech currently, setup an elevenlabs account and set ELEVENLABS_API_KEY in .env")
-        # self.engine = pyttsx3.init() # This segfaults on Mac python > 3.6.15
-        self.engine = None
-        
     def say(self, text: str):
-        return
-        self.engine.say(text)
-        self.engine.runAndWait()
+        with requests.get(f"http://localhost:5002/api/tts?text={text}&speaker_id=p243&style_wav=&language_id=", stream=True) as wav:
+            p = pyaudio.PyAudio()
+            
+            wf = wave.Wave_read(wav.raw)
+            stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
+                            channels=1,
+                            rate=22050,
+                            output=True)
+            while len(data := wf.readframes(CHUNK)):
+                stream.write(data)
+            stream.stop_stream()
+            stream.close()
+            p.terminate()
         
 class Talk:
     def __init__(self):
