@@ -3,17 +3,36 @@
 # per-container env files in place as well, but it's easiest to edit them
 # here as some apply to multiple containers.
 
-# If you're using an OpenAI instance
-OPENAI_API_TYPE=
+# Use the local motorhead for memory - alternately, set this to 'local'
+# and comment out motorhead from the docker-compose file to do in-process
+# memory in the agent.
+MEMORY=motorhead
+
+# OpenAI API keys
+# Type can be openai or azure - azure also requires the base and version to be set
+OPENAI_API_TYPE=openai
 OPENAI_API_KEY=
 OPENAI_API_BASE=
 OPENAI_API_VERSION=
+OPENAI_DEPLOYMENT_NAME=gpt-4
 
 ## Tools
-
-# Google search
+# Google search for doing web searches
 GOOGLE_API_KEY=
 GOOGLE_CSE_ID=
 
-# Wolfram Alpha
+# Wolfram Alpha for answering questions of fact
 WOLFRAM_ALPHA_APPID=
+
+# Google app client details for google login
+GOOGLE_WEB_CLIENT_ID=
+GOOGLE_WEB_CLIENT_SECRET=
+
+# Hugging face hub token for calling their models
+HUGGING_FACE_HUB_TOKEN=
+
+## Client - probably need to copy these into the client directory
+# Eleven Labs if you want a nicer voice
+ELEVENLABS_API_KEY=
+ELEVENLABS_VOICE_1_ID=EXAVITQu4vr4xnSDxMaL
+ELEVENLABS_VOICE_2_ID=21m00Tcm4TlvDq8ikWAM
