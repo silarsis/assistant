@@ -54,6 +54,14 @@ Other projects that have been an inspiration include:
   * https://github.com/randaller/llama-chat
   * https://open-assistant.io/
 
+## Client
+
+There is a python client that most of the development happens on. To run it:
+
+pip install -r client/requirements.txt
+python ./client/client-kv.py
+
+It will use the same env variable file as the rest, .env in the top level directory. It can listen and talk.
 
 ## Plans
 

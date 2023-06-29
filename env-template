@@ -32,7 +32,11 @@ GOOGLE_WEB_CLIENT_SECRET=
 HUGGING_FACE_HUB_TOKEN=
 
 ## Client - probably need to copy these into the client directory
-# Eleven Labs if you want a nicer voice
+# Eleven Labs if you want a nicer voice - you should comment out the tts container in docker-compose if you do this
 ELEVENLABS_API_KEY=
 ELEVENLABS_VOICE_1_ID=EXAVITQu4vr4xnSDxMaL
 ELEVENLABS_VOICE_2_ID=21m00Tcm4TlvDq8ikWAM
+
+# Deepgram if you want to use their speech to text - else it'll use OpenAI
+DEEPGRAM_API_KEY=
+
