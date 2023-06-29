@@ -1,7 +1,6 @@
 import os
 import threading
 import time
-import json
 from dotenv import load_dotenv
 import speech_recognition as sr
 from deepgram import Deepgram

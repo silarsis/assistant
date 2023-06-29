@@ -9,6 +9,7 @@
     session_id_entry: session_id_entry
     response_text: response_text
     hear_thoughts_button: hear_thoughts_button
+    listen_button: listen_button
     
     StackLayout:
         orientation: 'lr-tb'
@@ -35,8 +36,9 @@
             on_press: root.connect()
 
         Button:
+            id: listen_button
             text: 'Start Listening'
-            on_press: root.start_listening()
+            on_press: root.toggle_listening()
             size_hint: [0.2, 0.05]
         Button:
             id: hear_thoughts_button

@@ -113,13 +113,11 @@ class EchoClient(Widget):
         self.listen.stop_listening()
         
     def toggle_listening(self):
-        if self.listening:
+        if self.listen.listening:
             self.listen_button.text="Start Listening"
-            self.listening = False
             self.listen.stop_listening()
         else:
             self.listen_button.text="Stop Listening"
-            self.listening = True
             self.listen.start_listening()
             
     def toggle_hear_thoughts(self):
