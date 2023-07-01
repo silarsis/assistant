@@ -12,6 +12,7 @@ from models.tools.google_docs import GoogleDocLoader
 from models.codeagent import AzureCodeAgentExplain
 
 from huggingface_hub import hf_hub_download, try_to_load_from_cache
+import tiktoken
 from typing import List, Optional, Callable
 import guidance
 import requests
@@ -34,7 +35,7 @@ def add_text_to_chat_mode(chat_mode):
 _openai.add_text_to_chat_mode = add_text_to_chat_mode
 ## End monkey patch
 
-def getLLM(model: str = 'text-davinci-003'):
+def getLLM(model: Optional[str] = None):
     if os.environ.get('OPENAI_API_TYPE') == 'azure':
         print("Azure")
         return guidance.llms.OpenAI(
@@ -47,6 +48,9 @@ def getLLM(model: str = 'text-davinci-003'):
         )
     else:
         print("OpenAI")
+        model = os.environ.get('OPENAI_MODEL', 'text-davinci-003')
+        # TODO need to monkey patch guidance for tiktoken encoder selection
+        tiktoken.model.MODEL_TO_ENCODING.setdefault(model, 'p50k_base') # This is a guess
         return guidance.llms.OpenAI(model)
     
 DEFAULT_CHARACTER="""
