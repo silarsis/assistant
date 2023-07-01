@@ -12,7 +12,7 @@ class StarCoderAgent:
         return self._agent.run(query, temperature=0.7, remote=True)
     
 class AzureCodeAgentExplain:
-    query_template = "Please give your answer to the following question OR explain the following code. Pay particular attention to any possible security issues:\n{{query}}"
+    query_template = "Please give your answer to the following question. Pay particular attention to any possible security issues:\n{{query}}"
     def __init__(self):
         self.guide = guidance.llms.OpenAI(
             'code-davinci-002',
