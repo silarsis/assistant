@@ -18,14 +18,14 @@ class Model(ModelClass):
         # Make sure we have the model we want to use
         print("Downloading / ensuring model exists...", flush=True)
         filename = hf_hub_download(
-            repo_id="TheBloke/WizardLM-13B-Uncensored-GGML", 
-            filename="wizardLM-13B-Uncensored.ggml.q4_1.bin", 
+            repo_id="TheBloke/Vicuna-33B-1-3-SuperHOT-8K-GGML", 
+            filename="vicuna-33b-1.3-superhot-8k.ggmlv3.q2_K.bin", 
             cache_dir="/models")
         print("Model download complete", flush=True)
         # Load the model
         filename = try_to_load_from_cache(
-            repo_id="TheBloke/WizardLM-13B-Uncensored-GGML", 
-            filename="wizardLM-13B-Uncensored.ggml.q4_1.bin", 
+            repo_id="TheBloke/Vicuna-33B-1-3-SuperHOT-8K-GGML", 
+            filename="vicuna-33b-1.3-superhot-8k.ggmlv3.q2_K.bin", 
             cache_dir="/models")
         print(filename)
         self.model = GPT4All(filename, model_type='gptj', model_path='/models/')
