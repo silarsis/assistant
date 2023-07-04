@@ -70,49 +70,79 @@ services:
 #       - ./volumes/dalai/alpaca:/root/dalai/alpaca
 #       - ./volumes/dalai/llama:/root/dalai/llama
 
-  etcd: # Part of milvus
-    container_name: etcd
-    image: quay.io/coreos/etcd:v3.5.0
+  clickhouse:
+    image: clickhouse/clickhouse-server:22.9-alpine
     environment:
-      - ETCD_AUTO_COMPACTION_MODE=revision
-      - ETCD_AUTO_COMPACTION_RETENTION=1000
-      - ETCD_QUOTA_BACKEND_BYTES=4294967296
-      - ETCD_SNAPSHOT_COUNT=50000
-    volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/etcd:/etcd
-    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
-
-  minio: # Part of milvus
-    container_name: minio
-    image: minio/minio:latest
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
-    command: minio server /minio_data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-
-  milvus: # Part of milvus
-    container_name: milvus
-    image: milvusdb/milvus:latest
-    command: ["milvus", "run", "standalone"]
-    environment:
-      ETCD_ENDPOINTS: etcd:2379
-      MINIO_ADDRESS: minio:9000
-    volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
-      - ./milvus.yaml:/milvus/configs/milvus.yaml
+      - ALLOW_EMPTY_PASSWORD=yes
+      - CLICKHOUSE_TCP_PORT=9000
+      - CLICKHOUSE_HTTP_PORT=8123
     ports:
-      - "19530:19530"
-      - "9091:9091"
+      - '8123:8123'
+      - '9000:9000'
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/clickhouse/data:/bitnami/clickhouse
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/clickhouse/backups:/backups
+      # - ./clickhouse/backup_disk.xml:/etc/clickhouse-server/config.d/backup_disk.xml
+      # - ./clickhouse/chroma_users.xml:/etc/clickhouse-server/users.d/chroma.xml
+
+  chroma:
+    image: ghcr.io/chroma-core/chroma:latest
+    container_name: chroma
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/chroma:/index_data
+    command: uvicorn chromadb.app:app --reload --workers 1 --host 0.0.0.0 --port 6000 --log-config log_config.yml
+    environment:
+      - CHROMA_DB_IMPL=clickhouse
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_PORT=8123
+    ports:
+      - 6000:6000
     depends_on:
-      - "etcd"
-      - "minio"
+      - clickhouse
+
+  # etcd: # Part of milvus
+  #   container_name: etcd
+  #   image: quay.io/coreos/etcd:v3.5.0
+  #   environment:
+  #     - ETCD_AUTO_COMPACTION_MODE=revision
+  #     - ETCD_AUTO_COMPACTION_RETENTION=1000
+  #     - ETCD_QUOTA_BACKEND_BYTES=4294967296
+  #     - ETCD_SNAPSHOT_COUNT=50000
+  #   volumes:
+  #     - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/etcd:/etcd
+  #   command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+
+  # minio: # Part of milvus
+  #   container_name: minio
+  #   image: minio/minio:latest
+  #   environment:
+  #     MINIO_ROOT_USER: minioadmin
+  #     MINIO_ROOT_PASSWORD: minioadmin
+  #   volumes:
+  #     - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
+  #   command: minio server /minio_data
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+  #     interval: 30s
+  #     timeout: 20s
+  #     retries: 3
+
+  # milvus: # Part of milvus
+  #   container_name: milvus
+  #   image: milvusdb/milvus:latest
+  #   command: ["milvus", "run", "standalone"]
+  #   environment:
+  #     ETCD_ENDPOINTS: etcd:2379
+  #     MINIO_ADDRESS: minio:9000
+  #   volumes:
+  #     - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
+  #     - ./milvus.yaml:/milvus/configs/milvus.yaml
+  #   ports:
+  #     - "19530:19530"
+  #     - "9091:9091"
+  #   depends_on:
+  #     - "etcd"
+  #     - "minio"
 
   # Possible alternative to milvus, with less containers and cruft
   # weaviate:
@@ -158,8 +188,9 @@ services:
 # https://tts.readthedocs.io/en/latest/
   tts:
     container_name: tts
-    image: ghcr.io/coqui-ai/tts-cpu:latest
-    entrypoint: python3 TTS/server/server.py --model_name tts_models/en/vctk/vits
+    # image: ghcr.io/coqui-ai/tts-cpu:latest
+    image: synesthesiam/mozillatts:en
+    # entrypoint: python3 TTS/server/server.py --model_name tts_models/en/vctk/vits
     ports:
       - "5002:5002"
 

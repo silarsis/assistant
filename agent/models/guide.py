@@ -36,6 +36,7 @@ _openai.add_text_to_chat_mode = add_text_to_chat_mode
 ## End monkey patch
 
 def getLLM(model: Optional[str] = None):
+    model = os.environ.get('OPENAI_MODEL', 'text-davinci-003')
     if os.environ.get('OPENAI_API_TYPE') == 'azure':
         print("Azure")
         return guidance.llms.OpenAI(
@@ -48,7 +49,6 @@ def getLLM(model: Optional[str] = None):
         )
     else:
         print("OpenAI")
-        model = os.environ.get('OPENAI_MODEL', 'text-davinci-003')
         # TODO need to monkey patch guidance for tiktoken encoder selection
         tiktoken.model.MODEL_TO_ENCODING.setdefault(model, 'p50k_base') # This is a guess
         return guidance.llms.OpenAI(model)
