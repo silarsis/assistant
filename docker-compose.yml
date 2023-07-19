@@ -40,16 +40,16 @@ services:
   #   volumes:
   #     - ./volumes/gpt4all:/models
 
-  api:
-    image: quay.io/go-skynet/local-ai:latest
-    container_name: api
-    ports:
-      - 8765:8765
-    env_file:
-      - LocalAI.env
-    volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/api:/models:cached
-    command: ["/usr/bin/local-ai" ]
+  # api:
+  #   image: quay.io/go-skynet/local-ai:latest
+  #   container_name: api
+  #   ports:
+  #     - 8765:8765
+  #   env_file:
+  #     - LocalAI.env
+  #   volumes:
+  #     - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/api:/models:cached
+  #   command: ["/usr/bin/local-ai" ]
 
   webui: # The (currently web) interface for the assistant
     build: ./webui
