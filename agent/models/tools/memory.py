@@ -16,7 +16,7 @@ History:
 Summary: {{gen 'summary'}}
 """
     
-    def __init__(self, llm=None, default_character=None):
+    def __init__(self, llm=None):
         print("Local Memory")
         self.context = {}
         self.messages = {}
@@ -57,7 +57,7 @@ class MotorheadMemory:
     memory_key = "history"
     context: Optional[str] = None
     
-    def __init__(self, llm=None, default_character=None):
+    def __init__(self, llm=None):
         print("Motorhead memory")
         self.context = {}
         self.messages = {}

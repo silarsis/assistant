@@ -139,29 +139,13 @@ class PromptTemplate:
         self._prompt_templates.pop(session_id, None)
 
 
-def load_vicuna():
-    print("Loading Vicuna")
-    filename = hf_hub_download(
-        repo_id="TheBloke/WizardLM-13B-Uncensored-GGML", 
-        filename="wizardLM-13B-Uncensored.ggml.q4_1.bin", 
-        cache_dir="/models")
-    print("Model download complete", flush=True)
-    # Load the model
-    filename = try_to_load_from_cache(
-        repo_id="TheBloke/WizardLM-13B-Uncensored-GGML", 
-        filename="wizardLM-13B-Uncensored.ggml.q4_1.bin", 
-        cache_dir="/models")
-    print(filename)
-    return filename
-
 class Guide:
     def __init__(self, default_character: str):
         print("Initialising Guide")
         self.guide = getLLM()
         self._google_docs = GoogleDocLoader(llm=OpenAI(temperature=0.4))
         self.tools = self._setup_tools()
-        # self.guide = guidance.llms.transformers.Vicuna(load_vicuna())
-        self.memory = Memory(llm=self.guide, default_character=default_character)
+        self.memory = Memory(llm=self.guide)
         self.default_character = default_character
         self._prompt_templates = PromptTemplate(default_character, DEFAULT_PROMPT)
         self._tool_response_prompt_templates = PromptTemplate(default_character, DEFAULT_TOOL_PROMPT)
