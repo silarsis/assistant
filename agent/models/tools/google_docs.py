@@ -93,4 +93,6 @@ class GoogleDocLoader:
         # Now summarize the doc
         return f"Document loaded successfully. Document Summary: {self._summarize_elements(elements)}"
     
-        
+# Thought: Instead of databasing the raw text of the doc, why don't we use gdocs as the database,
+# and re-fetch it anytime we need it? Potential for mis-match between vectordb and content for any
+# document that's changing, check if there's a "last modified" field in the gdocs api
