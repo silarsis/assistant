@@ -13,11 +13,10 @@ from models.tools.memory import LocalMemory, MotorheadMemory
 
 from models.codeagent import AzureCodeAgentExplain
 
-from huggingface_hub import hf_hub_download, try_to_load_from_cache
+import traceback
 import tiktoken
 from typing import List, Optional, Callable
 import guidance
-import requests
 import os
 import json
 from pydantic import create_model
@@ -195,9 +194,9 @@ class Guide:
             kwargs['session_id'] = session_id
         try:
             tool_output = tool.func(action_input, **kwargs)
-        except Exception as e:
+        except Exception:
             print("  tool raised an exception")
-            print(e)
+            traceback.print_exc()
             tool_output = "This tool failed to run"
         print(f"Tool Output: {tool_output}\n")
         return tool_output
