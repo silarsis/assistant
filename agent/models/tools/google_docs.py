@@ -2,13 +2,12 @@ from googleapiclient.discovery import build
 # import to provide google.auth.credentials.Credentials
 from google.oauth2.credentials import Credentials
 from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
 from langchain.chains.summarize import load_summarize_chain
 from langchain.docstore.document import Document
 import chromadb
 from chromadb.config import Settings
 
-import base64
+import re
 
 CHROMADB_HOST = 'chroma'
 CHROMADB_PORT = '6000'
@@ -16,7 +15,10 @@ CHROMADB_PORT = '6000'
 class GoogleDocLoader:
     def __init__(self, llm=None):
         self._tokens = {}
-        self._embeddings = OpenAIEmbeddings(model="ada") # TODO this is maybe wrong for Azure OpenAI
+        if os.environ.get('OPENAI_API_TYPE') == 'azure':
+            self._embeddings = None
+        else:
+            self._embeddings = OpenAIEmbeddings(model="ada")
         self._llm = llm
         self._vector_stores = {}
         self._chroma_client = chromadb.Client(
@@ -48,44 +50,47 @@ class GoogleDocLoader:
         return text
     
     def _cache_key(self, docid: str) -> str:
-        return f"gdoc_{base64.b64encode(docid)}"
+        return f"gdoc_{docid}_key"
     
     def _vector_store(self, collection_name: str = 'LangChainCollection'):
         cache_key = self._cache_key(collection_name)
         if cache_key not in self._vector_stores:
             self._vector_stores[cache_key] = self._chroma_client.create_collection(
-                embedding_function=self._embeddings, 
+                embedding_function=self._embeddings,
                 name=cache_key
             )
         return self._vector_stores[cache_key]
     
     def _already_loaded(self, docid: str) -> bool:
         cache_key = self._cache_key(docid)
-        return cache_key in self._chroma_client.list_collections()
+        print(self._chroma_client.list_collections())
+        return cache_key in (c.name for c in self._chroma_client.list_collections())
     
+    def _fetch_from_gdocs(self, docid: str, creds) -> str:
+        service = build("docs", "v1", credentials=creds)
+        document = service.documents().get(documentId=docid).execute()
+        elements = self.read_structural_elements(document.get('body').get('content'))
+        return elements
+    
+    def _summarize_elements(self, elements: list) -> str:
+        chain = load_summarize_chain(self._llm, chain_type="map_reduce")
+        docs = [Document(page_content=t) for t in elements]
+        summary = chain.run(input_documents=docs, question="Write a summary within 200 words.")
+        return summary
+        
     def load_doc(self, docid: str, session_id: str = 'static', interim=None) -> str:
         creds = self._tokens.get(session_id, None)
         if not creds:
             return "No token found"
-        if self._already_loaded(docid):
-            return "Document already loaded" # TODO can we get the summary saved, or recreate it here?
-        service = build("docs", "v1", credentials=creds)
-        document = service.documents().get(documentId=docid).execute()
-        # Chunk and store the doc in our vector store
-        elements = self.read_structural_elements(document.get('body').get('content'))
+        if docid.startswith('http'):
+            # Strip the url
+            docid = re.search(r'document/d/([^/]+)/', docid).group(1)
+        elements = self._fetch_from_gdocs(docid, creds)
+        # Store in the vectordb
         self._vector_store(docid).add(documents=elements, ids=[f'{docid}_{i}' for i in range(len(elements))])
+        # Need to store in a separate db for the cleartext, with the same chunking of elements
+        # Then, we can use the same ids to retrieve the cleartext for things like summarization
         # Now summarize the doc
-        chain = load_summarize_chain(self._llm, chain_type="map_reduce")
-        docs = [Document(page_content=t) for t in elements]
-        summary = chain.run(input_documents=docs, question="Write a summary within 200 words.")
-        return f"Document loaded successfully. Document Summary: {summary}"
+        return f"Document loaded successfully. Document Summary: {self._summarize_elements(elements)}"
     
-    def query_doc(self, docid: str, query: str, session_id: str = 'static', interim=None) -> str:
-        response = ''
-        if not self._already_loaded(docid):
-            response = self.load_doc(docid, session_id, interim)
-            if interim:
-                interim(response)
-        # LangChain for querying a doc
-        return self._vector_store(docid).similarity_search(query)
         
