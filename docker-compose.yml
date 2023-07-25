@@ -43,35 +43,16 @@ services:
       DALAI_HOST: dalai
       GPT4ALL_HOST: gpt4all
 
-  clickhouse:
-    image: clickhouse/clickhouse-server:22.9-alpine
-    environment:
-      - ALLOW_EMPTY_PASSWORD=yes
-      - CLICKHOUSE_TCP_PORT=9000
-      - CLICKHOUSE_HTTP_PORT=8123
-    ports:
-      - '8123:8123'
-      - '9000:9000'
-    volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/clickhouse/data:/bitnami/clickhouse
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/clickhouse/backups:/backups
-      # - ./clickhouse/backup_disk.xml:/etc/clickhouse-server/config.d/backup_disk.xml
-      # - ./clickhouse/chroma_users.xml:/etc/clickhouse-server/users.d/chroma.xml
-
   chroma:
     image: ghcr.io/chroma-core/chroma:latest
     container_name: chroma
     volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/chroma:/index_data
-    command: uvicorn chromadb.app:app --reload --workers 1 --host 0.0.0.0 --port 6000 --log-config log_config.yml
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/chroma:/chroma
+    command: uvicorn chromadb.app:app --reload --workers 1 --host 0.0.0.0 --port 6000
     environment:
-      - CHROMA_DB_IMPL=clickhouse
-      - CLICKHOUSE_HOST=clickhouse
-      - CLICKHOUSE_PORT=8123
+      ANONYMIZED_TELEMETRY: False
     ports:
       - 6000:6000
-    depends_on:
-      - clickhouse
 
 # https://tts.readthedocs.io/en/latest/
   tts:
