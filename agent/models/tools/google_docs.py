@@ -8,6 +8,7 @@ import chromadb
 from chromadb.config import Settings
 
 import re
+import os
 
 CHROMADB_HOST = 'chroma'
 CHROMADB_PORT = '6000'
@@ -21,9 +22,8 @@ class GoogleDocLoader:
             self._embeddings = OpenAIEmbeddings(model="ada")
         self._llm = llm
         self._vector_stores = {}
-        self._chroma_client = chromadb.Client(
-            Settings(chroma_api_impl="rest", chroma_server_host=CHROMADB_HOST, chroma_server_http_port=CHROMADB_PORT))
-        
+        self._chroma_client = chromadb.HttpClient(host=CHROMADB_HOST, port=CHROMADB_PORT, settings=Settings(anonymized_telemetry=False))
+
     def set_token(self, token: dict, session_id: str = 'static') -> str: # TODO: This isn't token, this is credentials object
         self._tokens[session_id] = Credentials.from_authorized_user_info(token)
     
