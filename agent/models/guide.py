@@ -5,10 +5,10 @@ from langchain.utilities.wolfram_alpha import WolframAlphaAPIWrapper
 # from langchain.tools.file_management.write import WriteFileTool
 # from langchain.tools.file_management.read import ReadFileTool
 from langchain import OpenAI
-from models.tools import apify
+# from models.tools import apify
 from models.tools import web_requests
 from models.tools.google_docs import GoogleDocLoader
-from models.tools.planner import Planner
+# from models.tools.planner import Planner
 from models.tools.memory import LocalMemory, MotorheadMemory
 
 from models.codeagent import AzureCodeAgentExplain
@@ -158,16 +158,16 @@ class Guide:
         tools = []
         tools.append(Tool(name='Answer', func=lambda x: x, description="use when you already know the answer"))
         tools.append(Tool(name='Clarify', func=lambda x: x, description="use when you need more information"))
-        tools.append(Tool(name='Plan', func=Planner().run, description="use when the request is going to take multiple steps and/or tools to complete"))
+        # tools.append(Tool(name='Plan', func=Planner().run, description="use when the request is going to take multiple steps and/or tools to complete"))
         tools.append(Tool(name='Request', func=web_requests.scrape_text, description="use to make a request to a website, provide the url as action input"))
         tools.append(Tool(name='ExplainCode', func=AzureCodeAgentExplain().run, description="use for any computer programming-related requests, including code generation and explanation"))
         # tools.append(WriteFileTool())
         # tools.append(ReadFileTool())
         tools.append(Tool(name='LoadDocument', func=self._google_docs.load_doc, description="use to load a document, provide the document id as action input", args_schema=create_model('LoadDocumentModel', tool_input='', session_id='')))
-        if os.environ.get('APIFY_API_TOKEN'):
-            self.apify = apify.ApifyTool()
-            tools.append(Tool(name='Scrape', func=self.apify.scrape_website, description="use when you need to scrape a website, provide the url as action input"))
-            tools.append(Tool(name='Lookup', func=self.apify.query, description="use when you need to check if you already know something, provide the query as action input"))
+        # if os.environ.get('APIFY_API_TOKEN'):
+        #     self.apify = apify.ApifyTool()
+        #     tools.append(Tool(name='Scrape', func=self.apify.scrape_website, description="use when you need to scrape a website, provide the url as action input"))
+        #     tools.append(Tool(name='Lookup', func=self.apify.query, description="use when you need to check if you already know something, provide the query as action input"))
         if os.environ.get('WOLFRAM_ALPHA_APPID'):
             wolfram = WolframAlphaAPIWrapper()
             tools.append(Tool(name="Wolfram", func=wolfram.run, description="use when you need to answer factual questions about math, science, society, the time or culture"))
