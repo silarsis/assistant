@@ -1,6 +1,7 @@
 from typing import Optional, List
 import guidance
 import requests
+import os
 
 class LocalMemory:
     context: Optional[str] = None
@@ -99,3 +100,8 @@ class MotorheadMemory:
     def get_context(self, session_id) -> str:
         self.refresh_from(session_id)
         return self.context[session_id]
+    
+if os.environ.get('MEMORY') == 'local':
+    Memory = LocalMemory
+else:
+    Memory = MotorheadMemory

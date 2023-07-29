@@ -6,10 +6,11 @@ from langchain.utilities.wolfram_alpha import WolframAlphaAPIWrapper
 # from langchain.tools.file_management.read import ReadFileTool
 from langchain import OpenAI
 # from models.tools import apify
+from models.tools.prompt_template import PromptTemplate
 from models.tools import web_requests
 from models.tools.google_docs import GoogleDocLoader
-# from models.tools.planner import Planner
-from models.tools.memory import LocalMemory, MotorheadMemory
+from models.tools.planner import Planner
+from models.tools.memory import Memory
 
 from models.codeagent import AzureCodeAgentExplain
 
@@ -108,35 +109,6 @@ Please reword this answer to match your character, and add any additional inform
 {{gen 'answer'}}
 """
 
-if os.environ.get('MEMORY') == 'local':
-    Memory = LocalMemory
-else:
-    Memory = MotorheadMemory
-
-class PromptTemplate:
-    def __init__(self, default_character: str, default_prompt: str):
-        self.default_character = default_character
-        self.default_prompt = default_prompt
-        self._characters = {}
-        self._prompt_template_str = {}
-        self._prompt_templates = {}
-        
-    def get(self, session_id: str, llm) -> guidance.Program:
-        if session_id in self._prompt_templates:
-            return self._prompt_templates[session_id]
-        character = self._characters.setdefault(session_id, self.default_character)
-        template = self._prompt_template_str.setdefault(session_id, self.default_prompt)
-        self._prompt_templates[session_id] = guidance(template, llm=llm, character=character)
-        return self._prompt_templates[session_id]
-    
-    def set(self, session_id: str, prompt: str):
-        self._prompt_template_str[session_id] = prompt
-        self._prompt_templates.pop(session_id, None)
-        
-    def set_character(self, session_id: str, character: str):
-        self._characters[session_id] = character
-        self._prompt_templates.pop(session_id, None)
-
 
 class Guide:
     def __init__(self, default_character: str):
@@ -158,7 +130,7 @@ class Guide:
         tools = []
         tools.append(Tool(name='Answer', func=lambda x: x, description="use when you already know the answer"))
         tools.append(Tool(name='Clarify', func=lambda x: x, description="use when you need more information"))
-        # tools.append(Tool(name='Plan', func=Planner().run, description="use when the request is going to take multiple steps and/or tools to complete"))
+        tools.append(Tool(name='Plan', func=lambda x: Planner(self.guide).run(self.tools, x), description="use when the request is going to take multiple steps and/or tools to complete"))
         tools.append(Tool(name='Request', func=web_requests.scrape_text, description="use to make a request to a website, provide the url as action input"))
         tools.append(Tool(name='ExplainCode', func=AzureCodeAgentExplain().run, description="use for any computer programming-related requests, including code generation and explanation"))
         # tools.append(WriteFileTool())
