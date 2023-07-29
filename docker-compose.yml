@@ -47,12 +47,11 @@ services:
     image: ghcr.io/chroma-core/chroma:latest
     container_name: chroma
     volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/chroma:/chroma
-    command: uvicorn chromadb.app:app --reload --workers 1 --host 0.0.0.0 --port 6000
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/chroma/index_data:/index_data
     environment:
       ANONYMIZED_TELEMETRY: False
     ports:
-      - 6000:6000
+      - 6000:8000
 
 # https://tts.readthedocs.io/en/latest/
   tts:
