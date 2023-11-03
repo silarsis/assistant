@@ -38,7 +38,7 @@ jobs:
           images: silarsis/assistant-agent
           
       - name: Build and push
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v4
         with:
           context: ./agent/
           platforms: linux/amd64,linux/arm64
@@ -77,7 +77,7 @@ jobs:
           images: silarsis/assistant-agent
           
       - name: Build and push
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v4
         with:
           context: ./agent/
           platforms: linux/amd64,linux/arm64
