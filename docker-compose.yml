@@ -7,8 +7,8 @@ services:
     build: ./agent
     container_name: agent
     ports:
-      - "10000:10000"
-      - "8000:8000"
+      - "10000:10000" # The http port
+      - "8000:8000" # The text port
     environment:
       - MEMORY
       - OPENAI_API_KEY
