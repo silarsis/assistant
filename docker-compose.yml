@@ -3,7 +3,8 @@ version: '3.5'
 # Note, don't use port 8080 because google oauth uses that
 
 services:
-  agent: # The new agent, no actual llm required
+  # The main assistant
+  agent:
     build: ./agent
     container_name: agent
     ports:
@@ -22,27 +23,16 @@ services:
       - WOLFRAM_ALPHA_APPID
       - APIFY_API_TOKEN
 
-  api:
-    image: quay.io/go-skynet/local-ai:latest
-    container_name: api
-    ports:
-      - 8765:8765
-    env_file:
-      - LocalAI.env
-    volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/api:/models:cached
-    command: ["/usr/bin/local-ai" ]
-
-  webui: # The (currently web) interface for the assistant
+  # The web interface for the assistant
+  webui:
     build: ./webui
     container_name: webui
     ports:
       - "3000:3000"
     environment:
-      MILVUS_HOST: standalone
-      DALAI_HOST: dalai
       GPT4ALL_HOST: gpt4all
 
+  # A document store for memory for the assistant
   chroma:
     image: ghcr.io/chroma-core/chroma:latest
     container_name: chroma
@@ -53,41 +43,39 @@ services:
     ports:
       - 6000:8000
 
-# https://tts.readthedocs.io/en/latest/
-  tts:
-    container_name: tts
-    # image: ghcr.io/coqui-ai/tts-cpu:latest
-    image: synesthesiam/mozillatts:en
-    # entrypoint: python3 TTS/server/server.py --model_name tts_models/en/vctk/vits
+  # https://tts.readthedocs.io/en/latest/ - the voice of the assistant
+  # tts:
+  #   container_name: tts
+  #   # image: ghcr.io/coqui-ai/tts-cpu:latest
+  #   image: synesthesiam/mozillatts:en
+  #   # entrypoint: python3 TTS/server/server.py --model_name tts_models/en/vctk/vits
+  #   ports:
+  #     - "5002:5002"
+
+  # Motorhead for memory for the chat and responses
+  motorhead:
+    container_name: motorhead
+    image: ghcr.io/getmetal/motorhead:latest
     ports:
-      - "5002:5002"
+      - "8001:8001"
+    environment:
+      - PORT=8001
+      - REDIS_URL=redis://redis:6379
+      - MOTORHEAD_LONG_TERM_MEMORY=True
+      - OPENAI_API_KEY
+    depends_on:
+      - "redis"
 
-  # motorhead: # Memory
-  #   container_name: motorhead
-  #   image: ghcr.io/getmetal/motorhead:latest
-  #   ports:
-  #     - "8001:8001"
-  #   environment:
-  #     - PORT=8001
-  #     - REDIS_URL=redis://redis:6379
-  #     - MOTORHEAD_LONG_TERM_MEMORY=True
-  #     - OPENAI_API_KEY
-  #     - OPENAI_API_TYPE
-  #     - OPENAI_API_BASE
-  #     - OPENAI_API_VERSION
-  #     - OPENAI_DEPLOYMENT_NAME
-  #   depends_on:
-  #     - "redis"
+  # Backing store for motorhead
+  redis:
+    container_name: redis
+    image: redis/redis-stack:latest
+    restart: always
+    ports:
+      - '6379:6379'
+    volumes: 
+      - redis:/data
 
-  # redis:
-  #   container_name: redis
-  #   image: redis/redis-stack:latest
-  #   restart: always
-  #   ports:
-  #     - '6379:6379'
-  #   volumes: 
-  #     - redis:/data
-
-# volumes:
-#   redis:
-#     driver: local
+volumes:
+  redis:
+    driver: local

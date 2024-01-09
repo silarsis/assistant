@@ -7,12 +7,15 @@ langchain
 openai
 google-api-python-client
 wolframalpha
-transformers[agents]
+# transformers[agents]
 bs4
-guidance
 certifi
 apify-client
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
 chromadb-client
+semantic-kernel
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-otlp

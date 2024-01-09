@@ -9,9 +9,10 @@ from chromadb.config import Settings
 
 import re
 import os
+import time
 
 CHROMADB_HOST = 'chroma'
-CHROMADB_PORT = '6000'
+CHROMADB_PORT = '8000'
 
 class GoogleDocLoader:
     def __init__(self, llm=None):
@@ -22,7 +23,17 @@ class GoogleDocLoader:
             self._embeddings = OpenAIEmbeddings(model="ada")
         self._llm = llm
         self._vector_stores = {}
-        self._chroma_client = chromadb.HttpClient(host=CHROMADB_HOST, port=CHROMADB_PORT, settings=Settings(anonymized_telemetry=False))
+        while True:
+            try:
+                self._chroma_client = chromadb.HttpClient(host=CHROMADB_HOST, port=CHROMADB_PORT, settings=Settings(anonymized_telemetry=False))
+            except ValueError as e:
+                if 'Could not connect' in str(e):
+                    print("Waiting for chromadb...")
+                    time.sleep(1)
+                else:
+                    raise e
+            else:
+                break
 
     def set_token(self, token: dict, session_id: str = 'static') -> str: # TODO: This isn't token, this is credentials object
         self._tokens[session_id] = Credentials.from_authorized_user_info(token)

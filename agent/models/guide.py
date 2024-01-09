@@ -4,7 +4,7 @@ from langchain.utilities import GoogleSearchAPIWrapper
 from langchain.utilities.wolfram_alpha import WolframAlphaAPIWrapper
 # from langchain.tools.file_management.write import WriteFileTool
 # from langchain.tools.file_management.read import ReadFileTool
-from langchain import OpenAI
+from langchain.llms import OpenAI
 # from models.tools import apify
 from models.tools.prompt_template import PromptTemplate
 from models.tools import web_requests
@@ -12,60 +12,38 @@ from models.tools.google_docs import GoogleDocLoader
 from models.tools.planner import Planner
 from models.tools.memory import Memory
 
-from models.codeagent import AzureCodeAgentExplain
+# New semantic kernel setup
+import semantic_kernel as sk
+from semantic_kernel.connectors.ai.open_ai import OpenAIChatCompletion, AzureChatCompletion
+from semantic_kernel.planning.action_planner import ActionPlanner
+from models.plugins.ScrapeText import ScrapeTextSkill
 
 import traceback
-import tiktoken
 from typing import List, Optional, Callable
-import guidance
 import os
 import json
 from pydantic import create_model
 
-## Monkey patch
-from guidance.llms import _openai
-import types
 
-def add_text_to_chat_mode(chat_mode):
-    if isinstance(chat_mode, types.GeneratorType):
-        return _openai.add_text_to_chat_mode_generator(chat_mode)
-    else:
-        for c in chat_mode['choices']:
-            c['text'] = c['message']['content'] or 'None'
-        return chat_mode
+kernel = sk.Kernel()
 
-_openai.add_text_to_chat_mode = add_text_to_chat_mode
-## End monkey patch
-
-def getLLM(model: Optional[str] = None):
-    model = os.environ.get('OPENAI_MODEL', 'text-davinci-003')
+def getLLM(model: Optional[str] = "") -> sk.Kernel:
+    deployment = os.environ.get('OPENAI_DEPLOYMENT_NAME', "")
+    api_key = os.environ.get('OPENAI_API_KEY', "")
+    endpoint = os.environ.get('OPENAI_API_BASE', "")
+    org_id = os.environ.get('OPENAI_ORG_ID', None)
+    model = model or os.environ.get('OPENAI_DEPLOYMENT_NAME', "gpt-4")
     if os.environ.get('OPENAI_API_TYPE') == 'azure':
         print("Azure")
-        return guidance.llms.OpenAI(
-            model,
-            api_type=os.environ.get('OPENAI_API_TYPE'),
-            api_key=os.environ.get('OPENAI_API_KEY'),
-            api_base=os.environ.get('OPENAI_API_BASE'),
-            api_version=os.environ.get('OPENAI_API_VERSION'),
-            deployment_id=os.environ.get('OPENAI_DEPLOYMENT_NAME')
-        )
+        deployment, api_key, endpoint = sk.azure_openai_settings_from_dot_env()
+        kernel.add_chat_service("dv", AzureChatCompletion(deployment, endpoint, api_key=api_key))
     else:
         print("OpenAI")
-        # TODO need to monkey patch guidance for tiktoken encoder selection
-        tiktoken.model.MODEL_TO_ENCODING.setdefault(model, 'p50k_base') # This is a guess
-        return guidance.llms.OpenAI(model)
-    
-DEFAULT_CHARACTER="""
-You are an AI assistant.
-Your name is Echo.
-You are designed to be helpful, but you are also a bit of a smartass. You don't have to be polite.
-Your goal is to provide the user with answers to their questions and sometimes make them laugh.
-Use Markdown formatting in your answers where appropriate.
-You should answer in a personalised way, not too formal, concise, and not always polite.
-"""
+        # api_key, org_id = sk.openai_settings_from_dot_env()
+        kernel.add_chat_service("chat-gpt", OpenAIChatCompletion(model, api_key, org_id))
+    return kernel
 
 DEFAULT_PROMPT="""
-{{character}}
 
 Use the following format for your answers:
 
@@ -97,7 +75,6 @@ Action Input: {{gen 'action_input' stop='Human:'}}
 """
 
 DEFAULT_TOOL_PROMPT = """
-{{character}}
 
 You called the {{tool}} tool to answer the query '{{query}}'.
 The {{tool}} tool returned the following answer:
@@ -115,24 +92,31 @@ class Guide:
         print("Initialising Guide")
         self.guide = getLLM()
         self._google_docs = GoogleDocLoader(llm=OpenAI(temperature=0.4))
+        self._setup_planner()
         self.tools = self._setup_tools()
         self.memory = Memory(llm=self.guide)
         self.default_character = default_character
         self._prompt_templates = PromptTemplate(default_character, DEFAULT_PROMPT)
         self._tool_response_prompt_templates = PromptTemplate(default_character, DEFAULT_TOOL_PROMPT)
-        self.tool_selector = ToolSelector(self.tools, self.guide)
-        self.character_adder = AddCharacter(self.guide)
-        self.direct_responder = DirectResponse(self.guide)
+        # self.tool_selector = ToolSelector(self.tools, self.guide)
+        self.character_adder = AddCharacter(self.guide, character=self.default_character)
+        self.direct_responder = DirectResponse(self.guide, character=self.default_character)
         print("Guide initialised")
+        
+    def _setup_planner(self):
+        print("Setting up the planner and plugins")
+        kernel.import_skill(ScrapeTextSkill, "ScrapeText")
+        self.planner = ActionPlanner(kernel)
+        print("Planner created")
         
     def _setup_tools(self) -> List[Tool]:
         # Define which tools the agent can use to answer user queries
+        print("Setting up tools")
         tools = []
         tools.append(Tool(name='Answer', func=lambda x: x, description="use when you already know the answer"))
         tools.append(Tool(name='Clarify', func=lambda x: x, description="use when you need more information"))
         tools.append(Tool(name='Plan', func=lambda x: Planner(self.guide).run(self.tools, x), description="use when the request is going to take multiple steps and/or tools to complete"))
         tools.append(Tool(name='Request', func=web_requests.scrape_text, description="use to make a request to a website, provide the url as action input"))
-        tools.append(Tool(name='ExplainCode', func=AzureCodeAgentExplain().run, description="use for any computer programming-related requests, including code generation and explanation"))
         # tools.append(WriteFileTool())
         # tools.append(ReadFileTool())
         tools.append(Tool(name='LoadDocument', func=self._google_docs.load_doc, description="use to load a document, provide the document id as action input", args_schema=create_model('LoadDocumentModel', tool_input='', session_id='')))
@@ -173,46 +157,30 @@ class Guide:
         print(f"Tool Output: {tool_output}\n")
         return tool_output
     
-    def prompt(self, query: str, history: str="", interim: Optional[Callable[[str], None]]=None, **kwargs) -> str:
-        session_id = kwargs.get('session_id', 'static')
-        hear_thoughts = kwargs.get('hear_thoughts', False)
+    def _call_llm(self, session_id: str='static', **kwargs):
+        prompt = self._prompt_templates.get(session_id, self.kernel)
+        ctx = self.kernel.create_new_context()
+        for k,v in kwargs.items():
+            ctx[k] = v
+        response = prompt(context=ctx)
+        return str(response).strip()
+    
+    def prompt(self, query: str, history: str="", interim: Optional[Callable[[str], None]]=None, session_id: str='static', hear_thoughts: bool=False, **kwargs) -> str:
         if not history:
             history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
         self.memory.add_message(role="Human", content=f'Human: {query}', session_id=session_id)
-        # Select the tool to use
-        (action, action_input) = self.tool_selector.select(query, history_context, history, session_id=session_id)
-        print(f"Action: {action}\nAction Input: {action_input}\n")
-        # Clarify should probably actually do something interesting with the history or something
-        if action in ('Answer', 'Clarify'):
-            # This represents a completed answer
-            (thought, response) = self.direct_responder.response(
-                history_context, 
-                history, 
-                query, 
-                action_input,
-                session_id=session_id
-            )
-            self.memory.add_message(role="AI", content=f"Action: {action}\nAction Input: {response}\n", session_id=session_id)
-            print(f"Thought: {thought}\nResponse: {response}\n")
-            if interim and hear_thoughts:
-                interim(f"\nThought: {thought}.\n")
-            return response
-        print(f"Looking for tool for action '{action}'")
-        tool = next((tool for tool in self.tools if tool.name.lower() == action.lower()), None)
-        if tool:
-            tool_output = self._call_tool(tool, action_input, session_id)
-            self.memory.add_message(role="AI", content=f"Outcome: {tool_output}", session_id=session_id)
-            response = self._get_tool_response_prompt_template(session_id)(query=query, tool=tool.name, tool_output=tool_output)
-            # reworded_response = self.character_adder.reword(query, response['answer'], session_id=session_id)
-            self.memory.add_message(role="AI", content=f"Action: Answer\nAction Input: {response['answer']}\n", session_id=session_id)
-            return response['answer']
-        else:
-            print(f"  No tool found for action '{action}'")
-            return self.prompt(
-                query=query, 
-                history=f"{self.memory.get_context(session_id=session_id)}\nAction: {action}\nAction Input: {action_input}\nOutcome: No tool found for action '{action}'\n"
-            ) # TODO Add character here
+        (thought, response) = self.direct_responder.response(
+            history_context, 
+            history, 
+            query, 
+            session_id=session_id
+        )
+        self.memory.add_message(role="AI", content=f"Response: {response}\n", session_id=session_id)
+        print(f"Response: {response}\n")
+        if interim and hear_thoughts:
+            interim(f"\nThought: {thought}.\n")
+        return response
 
     async def update_prompt_template(self, prompt: str, callback: Callable[[str], None], **kwargs) -> str:
         self._prompt_templates.set(kwargs.get('session_id', 'static'), prompt)
@@ -224,102 +192,97 @@ class Guide:
     
 class AddCharacter:
     " Designed to run over the results of any query and add character to the response "
-    character = DEFAULT_CHARACTER
     prompt = """
-{{character}}
     
 You were asked the following question:
-{{await 'query'}}
+{{$query}}
 
 Please reword the following answer to make it clearer or more interesting:
-{{await 'answer'}}
+{{$answer}}
 
-{{gen 'character_answer'}}
 """
-    def __init__(self, llm):
-        if llm:
-            self.llm = llm
-        else:
-            self.llm = getLLM()
+    def __init__(self, kernel: Optional[sk.Kernel] = None, character: str = ""):
+        self.kernel = kernel or getLLM()
+        self.character = character
         self._prompt_templates = PromptTemplate(self.character, self.prompt)
         
     def reword(self, query: str, answer: str, **kwargs) -> str:
         session_id = kwargs.get('session_id', 'static')
-        response = self._prompt_templates.get(session_id, self.llm)(query=query, answer=answer)
-        return response['character_answer'].strip()
+        prompt = self._prompt_templates.get(session_id, self.kernel)
+        context = self.kernel.create_new_context()
+        context['query'] = query
+        context['answer'] = answer
+        response = prompt(context=context)
+        return str(response).strip()
+    
+
+# class ToolSelector:
+#     " Designed to decide how to answer a question "
+#     character = """
+# You are an AI assistant with a handful of tools at your disposal.
+# Your job is to select the most appropriate tool for the query.
+# """
+
+#     prompt = """
+# Your available tools are: {{$tools}}.
+
+# Context:
+# {{$context}}
+
+# Chat History:
+# {{$history}}
+
+# Human: {{$query}}
+
+# Please select the best tool to answer the human's request from the list above by name only.
+
+# The best tool is: 
+# """
+#     def __init__(self, tools: list, kernel):
+#         self.tools = list([f"{tool.name} ({tool.description})\n" for tool in tools])
+#         self.kernel = kernel or getLLM()
+#         self._prompt_templates = PromptTemplate(self.character, self.prompt)
         
-class ToolSelector:
-    " Designed to decide how to answer a question "
-    character = """
-You are an AI assistant with a handful of tools at your disposal.
-Your job is to select the most appropriate tool for the query.
-"""
-
-    prompt = """
-Your available tools are: {{tools}}.
-
-Context:
-{{await 'context'}}
-
-Chat History:
-{{await 'history'}}
-
-Human: {{await 'query'}}
-
-Please select the best tool to answer the human's request from the list above by name only.
-The best tool is: {{gen 'tool'}}
-
-Now, given the tool selected, please provide the input to the tool.
-The tool input is: {{gen 'tool_input'}}
-"""
-    def __init__(self, tools: list, llm):
-        self.tools = '\n'.join([f"{tool.name} ({tool.description})\n" for tool in tools])
-        if llm:
-            self.llm = llm
-        else:
-            self.llm = getLLM()
-        self._prompt_templates = PromptTemplate(self.character, self.prompt)
-        
-    def select(self, query: str, context: str, history: str, **kwargs) -> str:
-        session_id = kwargs.get('session_id', 'static')
-        response = self._prompt_templates.get(session_id, self.llm)(tools=self.tools, query=query, context=context, history=history)
-        tool = response['tool'].strip()
-        tool_input = response['tool_input'].strip()
-        return (tool, tool_input)
+#     def select(self, query: str, context: str, history: str, **kwargs) -> str:
+#         session_id = kwargs.get('session_id', 'static')
+#         prompt = self._prompt_templates.get(session_id, self.kernel)
+#         ctx = self.kernel.create_new_context()
+#         ctx['tools'] = self.tools
+#         ctx['context'] = context
+#         ctx['history'] = history
+#         ctx['query'] = query
+#         response = str(prompt(context=ctx)).strip()
+#         return (response, '')
     
 class DirectResponse:
     " Designed to answer a question directly "
-    character = DEFAULT_CHARACTER
     prompt = """
-{{character}}
 
 Use the following format for your answers:
 
 Human: the input question you must answer
-Answer: a suggested answer to the question
-Criticism: does the suggested answer actually answer the question, does it sound in character, does it make sense given the context and chat history?
-Response: based on the initial answer and criticism, a final response should be recorded here
+Answer: your answer to the question
 
 Context:
-{{await 'context'}}
+{{$context}}
 
 Chat History:
-{{await 'history'}}
+{{$history}}
 
-Human: {{await 'query'}}
-Answer: {{await 'answer'}}
-Criticism: {{gen 'criticism' temperature=0.7}}
-Response: {{gen 'response' stop='Response:' temperature=0.7}}
-"""
+Human: {{$query}}
+Answer: """
 
-    def __init__(self, llm):
-        if llm:
-            self.llm = llm
-        else:
-            self.llm = getLLM()
+    def __init__(self, kernel: Optional[sk.Kernel] = None, character: str = ""):
+        self.kernel = kernel or getLLM()
+        self.character = character
         self._prompt_templates = PromptTemplate(self.character, self.prompt)
         
-    def response(self, context: str, history: str, query: str, answer: str, **kwargs) -> str:
+    def response(self, context: str, history: str, query: str, **kwargs) -> str:
         session_id = kwargs.get('session_id', 'static')
-        response = self._prompt_templates.get(session_id, self.llm)(context=context or 'None', history=history or 'None', query=query, answer=answer)
-        return (response['criticism'].strip(), response['response'].strip())
+        prompt = self._prompt_templates.get(session_id, self.kernel)
+        ctx = self.kernel.create_new_context()
+        ctx['context'] = context
+        ctx['history'] = history
+        ctx['query'] = query
+        response = prompt(context=ctx)
+        return ('None', str(response).strip())

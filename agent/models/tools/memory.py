@@ -1,5 +1,4 @@
 from typing import Optional, List
-import guidance
 import requests
 import os
 
@@ -9,20 +8,21 @@ class LocalMemory:
 Summarise the following conversation history, taking the existing context into account:
 
 Context:
-{{await 'context'}}
+{{$context}}
 
 History:
-{{await 'history'}}
+{{$history}}
 
-Summary: {{gen 'summary'}}
+Summary: 
 """
     
-    def __init__(self, llm=None):
+    def __init__(self, kernel=None):
         print("Local Memory")
         self.context = {}
         self.messages = {}
-        self.llm = llm
-        self.prompt = guidance(self.template, llm=llm)
+        self.kernel = kernel
+        self.prompt = kernel.create_semantic_function(
+            prompt_template=self.template, max_tokens=2000, temperature=0.2, top_p=0.5)
         
     def refresh_from(self, session_id: str) -> None:
         self.context.setdefault(session_id, "")
@@ -33,8 +33,11 @@ Summary: {{gen 'summary'}}
         if not contextualise:
             return
         self.messages[session_id] = self.messages[session_id][-10:]
-        response = self.prompt(context=self.get_context(session_id), history="\n".join([message["content"] for message in contextualise]))
-        return response['summary']
+        context = self.kernel.create_new_context()
+        context['context'] = self.get_context(session_id)
+        context['history'] = "\n".join([message["content"] for message in contextualise])
+        response = self.prompt(context=context)
+        return response
     
     def add_message(self, role: str, content: str, session_id: str) -> None:
         self.messages.setdefault(session_id, []).append({"role": role, "content": content})

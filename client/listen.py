@@ -3,7 +3,9 @@ import threading
 import time
 from dotenv import load_dotenv
 import speech_recognition as sr
-from deepgram import Deepgram
+
+if os.environ.get('DEEPGRAM_API_KEY'):
+    from deepgram import Deepgram
 
 load_dotenv()
 
