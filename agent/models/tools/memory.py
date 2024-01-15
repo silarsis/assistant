@@ -61,8 +61,9 @@ class MotorheadMemory:
     memory_key = "history"
     context: Optional[str] = None
     
-    def __init__(self, llm=None):
+    def __init__(self, kernel=None):
         print("Motorhead memory")
+        # We don't use the kernel in here, it's all embedded in the motorhead service
         self.context = {}
         self.messages = {}
     

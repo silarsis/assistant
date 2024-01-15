@@ -1,10 +1,10 @@
 ## Tools
 from langchain.agents import Tool
-from langchain.utilities import GoogleSearchAPIWrapper
+from langchain_community.utilities import GoogleSearchAPIWrapper
 from langchain.utilities.wolfram_alpha import WolframAlphaAPIWrapper
 # from langchain.tools.file_management.write import WriteFileTool
 # from langchain.tools.file_management.read import ReadFileTool
-from langchain.llms import OpenAI
+from langchain_openai import OpenAI
 # from models.tools import apify
 from models.tools.prompt_template import PromptTemplate
 from models.tools import web_requests
@@ -14,7 +14,8 @@ from models.tools.memory import Memory
 
 # New semantic kernel setup
 import semantic_kernel as sk
-from semantic_kernel.connectors.ai.open_ai import OpenAIChatCompletion, AzureChatCompletion
+from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
+
 from semantic_kernel.planning.action_planner import ActionPlanner
 from models.plugins.ScrapeText import ScrapeTextSkill
 
@@ -25,9 +26,8 @@ import json
 from pydantic import create_model
 
 
-kernel = sk.Kernel()
-
-def getLLM(model: Optional[str] = "") -> sk.Kernel:
+def getKernel(model: Optional[str] = "") -> sk.Kernel:
+    kernel = sk.Kernel()
     deployment = os.environ.get('OPENAI_DEPLOYMENT_NAME', "")
     api_key = os.environ.get('OPENAI_API_KEY', "")
     endpoint = os.environ.get('OPENAI_API_BASE', "")
@@ -40,7 +40,15 @@ def getLLM(model: Optional[str] = "") -> sk.Kernel:
     else:
         print("OpenAI")
         # api_key, org_id = sk.openai_settings_from_dot_env()
-        kernel.add_chat_service("chat-gpt", OpenAIChatCompletion(model, api_key, org_id))
+        if endpoint:
+            # Need to use a different connector here to connect to the custom endpoint
+            from semantic_kernel.connectors.ai.open_ai.services.open_ai_chat_completion import AsyncOpenAI, OpenAIChatCompletion
+            # create the openai connection
+            client = AsyncOpenAI(model_name=model, openai_api_key=api_key, openai_api_base=endpoint, openai_organization=org_id)
+            kernel.add_chat_service("chat-gpt", OpenAIChatCompletion(model, client))
+        else:
+            from semantic_kernel.connectors.ai.open_ai import OpenAIChatCompletion
+            kernel.add_chat_service("chat-gpt", OpenAIChatCompletion(model, api_key, org_id))
     return kernel
 
 DEFAULT_PROMPT="""
@@ -90,11 +98,11 @@ Please reword this answer to match your character, and add any additional inform
 class Guide:
     def __init__(self, default_character: str):
         print("Initialising Guide")
-        self.guide = getLLM()
+        self.guide = getKernel()
         self._google_docs = GoogleDocLoader(llm=OpenAI(temperature=0.4))
         self._setup_planner()
-        self.tools = self._setup_tools()
-        self.memory = Memory(llm=self.guide)
+        # self.tools = self._setup_tools()
+        self.memory = Memory(kernel=self.guide)
         self.default_character = default_character
         self._prompt_templates = PromptTemplate(default_character, DEFAULT_PROMPT)
         self._tool_response_prompt_templates = PromptTemplate(default_character, DEFAULT_TOOL_PROMPT)
@@ -105,8 +113,8 @@ class Guide:
         
     def _setup_planner(self):
         print("Setting up the planner and plugins")
-        kernel.import_skill(ScrapeTextSkill, "ScrapeText")
-        self.planner = ActionPlanner(kernel)
+        self.guide.import_skill(ScrapeTextSkill, "ScrapeText")
+        self.planner = ActionPlanner(self.guide)
         print("Planner created")
         
     def _setup_tools(self) -> List[Tool]:
