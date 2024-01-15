@@ -1,7 +1,7 @@
 from googleapiclient.discovery import build
 # import to provide google.auth.credentials.Credentials
 from google.oauth2.credentials import Credentials
-from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain.chains.summarize import load_summarize_chain
 from langchain.docstore.document import Document
 import chromadb

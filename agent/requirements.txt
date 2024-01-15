@@ -4,6 +4,8 @@ nest_asyncio
 huggingface_hub
 python-dotenv
 langchain
+langchain-community
+langchain-openai
 openai
 google-api-python-client
 wolframalpha
@@ -14,6 +16,7 @@ apify-client
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
+fastapi
 chromadb-client
 semantic-kernel
 opentelemetry-api

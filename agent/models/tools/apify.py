@@ -6,7 +6,7 @@ import apify_client
 import os
 
 # https://python.langchain.com/en/latest/modules/indexes/vectorstores/examples/milvus.html
-from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain.vectorstores import Milvus
 
 embeddings = OpenAIEmbeddings()
