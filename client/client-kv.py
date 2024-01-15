@@ -131,7 +131,6 @@ class EchoClient(Widget):
     @mainthread
     def add_to_response_text(self, message) -> None:
         " Called to add text to the response box when it comes back from the AI (in the main thread) "
-        print("In add_to_response", message)
         self.response_text.text += message
         self.response_text.render()
         

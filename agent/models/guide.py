@@ -19,7 +19,6 @@ from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
 from semantic_kernel.planning.action_planner import ActionPlanner
 from models.plugins.ScrapeText import ScrapeTextSkill
 
-import traceback
 from typing import List, Optional, Callable
 import os
 import json
@@ -101,13 +100,9 @@ class Guide:
         self.guide = getKernel()
         self._google_docs = GoogleDocLoader(llm=OpenAI(temperature=0.4))
         self._setup_planner()
-        # self.tools = self._setup_tools()
         self.memory = Memory(kernel=self.guide)
         self.default_character = default_character
         self._prompt_templates = PromptTemplate(default_character, DEFAULT_PROMPT)
-        self._tool_response_prompt_templates = PromptTemplate(default_character, DEFAULT_TOOL_PROMPT)
-        # self.tool_selector = ToolSelector(self.tools, self.guide)
-        self.character_adder = AddCharacter(self.guide, character=self.default_character)
         self.direct_responder = DirectResponse(self.guide, character=self.default_character)
         print("Guide initialised")
         
@@ -140,45 +135,17 @@ class Guide:
             tools.append(Tool(name="Search", func=search.run, description="use when you need to search for something on the internet"))
         print(f"Tools: {[tool.name for tool in tools]}")
         return tools
-        
-    def _get_prompt_template(self, session_id: str) -> str:
-        return self._prompt_templates.get(session_id, self.guide)(tool_names=[tool.name for tool in self.tools])
     
-    def _get_tool_response_prompt_template(self, session_id: str) -> str:
-        return self._tool_response_prompt_templates.get(session_id, self.guide)
-        
     async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], **kwargs) -> None:
-        response = self.prompt(query=prompt, interim=callback, hear_thoughts=kwargs.get('hear_thoughts', False), session_id=kwargs.get('session_id', 'static'))
+        response = await self.prompt(query=prompt, interim=callback, hear_thoughts=kwargs.get('hear_thoughts', False), session_id=kwargs.get('session_id', 'static'))
         return callback(response)
     
-    def _call_tool(self, tool, action_input: str, session_id: str) -> str:
-        print(f"  Calling {tool.name} with input {action_input}")
-        kwargs = {}
-        if tool.args_schema and 'session_id' in json.loads(tool.args_schema.schema_json())['properties']:
-            kwargs['session_id'] = session_id
-        try:
-            tool_output = tool.func(action_input, **kwargs)
-        except Exception:
-            print("  tool raised an exception")
-            traceback.print_exc()
-            tool_output = "This tool failed to run"
-        print(f"Tool Output: {tool_output}\n")
-        return tool_output
-    
-    def _call_llm(self, session_id: str='static', **kwargs):
-        prompt = self._prompt_templates.get(session_id, self.kernel)
-        ctx = self.kernel.create_new_context()
-        for k,v in kwargs.items():
-            ctx[k] = v
-        response = prompt(context=ctx)
-        return str(response).strip()
-    
-    def prompt(self, query: str, history: str="", interim: Optional[Callable[[str], None]]=None, session_id: str='static', hear_thoughts: bool=False, **kwargs) -> str:
+    async def prompt(self, query: str, history: str="", interim: Optional[Callable[[str], None]]=None, session_id: str='static', hear_thoughts: bool=False, **kwargs) -> str:
         if not history:
             history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
         self.memory.add_message(role="Human", content=f'Human: {query}', session_id=session_id)
-        (thought, response) = self.direct_responder.response(
+        response = await self.direct_responder.response(
             history_context, 
             history, 
             query, 
@@ -186,8 +153,6 @@ class Guide:
         )
         self.memory.add_message(role="AI", content=f"Response: {response}\n", session_id=session_id)
         print(f"Response: {response}\n")
-        if interim and hear_thoughts:
-            interim(f"\nThought: {thought}.\n")
         return response
 
     async def update_prompt_template(self, prompt: str, callback: Callable[[str], None], **kwargs) -> str:
@@ -197,70 +162,6 @@ class Guide:
     async def update_google_docs_token(self, token: str, callback: Callable[[str], None], session_id: str ='', **kwargs) -> str:
         self._google_docs.set_token(json.loads(token), session_id=session_id)
         callback("Authenticated")
-    
-class AddCharacter:
-    " Designed to run over the results of any query and add character to the response "
-    prompt = """
-    
-You were asked the following question:
-{{$query}}
-
-Please reword the following answer to make it clearer or more interesting:
-{{$answer}}
-
-"""
-    def __init__(self, kernel: Optional[sk.Kernel] = None, character: str = ""):
-        self.kernel = kernel or getLLM()
-        self.character = character
-        self._prompt_templates = PromptTemplate(self.character, self.prompt)
-        
-    def reword(self, query: str, answer: str, **kwargs) -> str:
-        session_id = kwargs.get('session_id', 'static')
-        prompt = self._prompt_templates.get(session_id, self.kernel)
-        context = self.kernel.create_new_context()
-        context['query'] = query
-        context['answer'] = answer
-        response = prompt(context=context)
-        return str(response).strip()
-    
-
-# class ToolSelector:
-#     " Designed to decide how to answer a question "
-#     character = """
-# You are an AI assistant with a handful of tools at your disposal.
-# Your job is to select the most appropriate tool for the query.
-# """
-
-#     prompt = """
-# Your available tools are: {{$tools}}.
-
-# Context:
-# {{$context}}
-
-# Chat History:
-# {{$history}}
-
-# Human: {{$query}}
-
-# Please select the best tool to answer the human's request from the list above by name only.
-
-# The best tool is: 
-# """
-#     def __init__(self, tools: list, kernel):
-#         self.tools = list([f"{tool.name} ({tool.description})\n" for tool in tools])
-#         self.kernel = kernel or getLLM()
-#         self._prompt_templates = PromptTemplate(self.character, self.prompt)
-        
-#     def select(self, query: str, context: str, history: str, **kwargs) -> str:
-#         session_id = kwargs.get('session_id', 'static')
-#         prompt = self._prompt_templates.get(session_id, self.kernel)
-#         ctx = self.kernel.create_new_context()
-#         ctx['tools'] = self.tools
-#         ctx['context'] = context
-#         ctx['history'] = history
-#         ctx['query'] = query
-#         response = str(prompt(context=ctx)).strip()
-#         return (response, '')
     
 class DirectResponse:
     " Designed to answer a question directly "
@@ -280,17 +181,18 @@ Chat History:
 Human: {{$query}}
 Answer: """
 
-    def __init__(self, kernel: Optional[sk.Kernel] = None, character: str = ""):
-        self.kernel = kernel or getLLM()
+    def __init__(self, kernel: sk.Kernel, character: str = ""):
+        self.kernel = kernel
         self.character = character
         self._prompt_templates = PromptTemplate(self.character, self.prompt)
         
-    def response(self, context: str, history: str, query: str, **kwargs) -> str:
+    async def response(self, context: str, history: str, query: str, **kwargs) -> str:
         session_id = kwargs.get('session_id', 'static')
         prompt = self._prompt_templates.get(session_id, self.kernel)
         ctx = self.kernel.create_new_context()
-        ctx['context'] = context
-        ctx['history'] = history
-        ctx['query'] = query
-        response = prompt(context=ctx)
-        return ('None', str(response).strip())
+        ctx.variables['context'] = context
+        ctx.variables['history'] = history
+        ctx.variables['query'] = query
+        print(ctx.variables)
+        response = await prompt.invoke_async(context=ctx)
+        return str(response).strip()

@@ -2,6 +2,8 @@ from typing import Optional, List
 import requests
 import os
 
+import semantic_kernel as sk
+
 class LocalMemory:
     context: Optional[str] = None
     template: str = """
@@ -33,10 +35,10 @@ Summary:
         if not contextualise:
             return
         self.messages[session_id] = self.messages[session_id][-10:]
-        context = self.kernel.create_new_context()
-        context['context'] = self.get_context(session_id)
-        context['history'] = "\n".join([message["content"] for message in contextualise])
-        response = self.prompt(context=context)
+        ctx = sk.ContextVariables()
+        ctx['context'] = self.get_context(session_id)
+        ctx['history'] = "\n".join([message["content"] for message in contextualise])
+        response = self.prompt(context=ctx)
         return response
     
     def add_message(self, role: str, content: str, session_id: str) -> None:
@@ -74,6 +76,7 @@ class MotorheadMemory:
             headers={"Content-Type": "application/json"},
         )
         res_data = res.json()
+        print(res_data)
         self.context[session_id] = res_data.get("context", "NONE")
         messages = res_data.get("messages", [])
         messages.reverse()
