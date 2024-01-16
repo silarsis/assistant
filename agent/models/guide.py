@@ -34,7 +34,6 @@ def getKernel(model: Optional[str] = "") -> sk.Kernel:
     model = model or os.environ.get('OPENAI_DEPLOYMENT_NAME', "gpt-4")
     if os.environ.get('OPENAI_API_TYPE') == 'azure':
         print("Azure")
-        deployment, api_key, endpoint = sk.azure_openai_settings_from_dot_env()
         kernel.add_chat_service("dv", AzureChatCompletion(deployment, endpoint, api_key=api_key))
     else:
         print("OpenAI")
@@ -43,8 +42,8 @@ def getKernel(model: Optional[str] = "") -> sk.Kernel:
             # Need to use a different connector here to connect to the custom endpoint
             from semantic_kernel.connectors.ai.open_ai.services.open_ai_chat_completion import AsyncOpenAI, OpenAIChatCompletion
             # create the openai connection
-            client = AsyncOpenAI(model_name=model, openai_api_key=api_key, openai_api_base=endpoint, openai_organization=org_id)
-            kernel.add_chat_service("chat-gpt", OpenAIChatCompletion(model, client))
+            client = AsyncOpenAI(api_key=api_key, organization=org_id, base_url=endpoint)
+            kernel.add_chat_service("chat-gpt", OpenAIChatCompletion(model, async_client=client))
         else:
             from semantic_kernel.connectors.ai.open_ai import OpenAIChatCompletion
             kernel.add_chat_service("chat-gpt", OpenAIChatCompletion(model, api_key, org_id))
