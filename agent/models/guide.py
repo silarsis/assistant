@@ -1,15 +1,11 @@
 ## Tools
 from langchain.agents import Tool
 from langchain_community.utilities import GoogleSearchAPIWrapper
-from langchain.utilities.wolfram_alpha import WolframAlphaAPIWrapper
-# from langchain.tools.file_management.write import WriteFileTool
-# from langchain.tools.file_management.read import ReadFileTool
 from langchain_openai import OpenAI
 # from models.tools import apify
 from models.tools.prompt_template import PromptTemplate
 from models.tools import web_requests
 from models.tools.google_docs import GoogleDocLoader
-from models.tools.planner import Planner
 from models.tools.memory import Memory
 
 # New semantic kernel setup
@@ -17,7 +13,8 @@ import semantic_kernel as sk
 from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
 
 from semantic_kernel.planning.action_planner import ActionPlanner
-from models.plugins.ScrapeText import ScrapeTextSkill
+# from models.plugins.ScrapeText import ScrapeTextSkill
+from models.plugins.WolframAlpha import WolframAlphaPlugin
 from semantic_kernel.core_skills import FileIOSkill, MathSkill, TextSkill, TimeSkill
 
 from typing import List, Optional, Callable
@@ -50,49 +47,6 @@ def getKernel(model: Optional[str] = "") -> sk.Kernel:
             kernel.add_chat_service("chat-gpt", OpenAIChatCompletion(model, api_key, org_id))
     return kernel
 
-DEFAULT_PROMPT="""
-
-Use the following format for your answers:
-
-Human: the input question you must answer
-Thought: you should always think about what to do, and check whether the answer is in the chat history or not
-Criticism: you should always criticise your own actions
-Action: the action to take, should be one of [{{tool_names}}]
-Action Input: the input to the action, or the answer if you are using the Answer tool
-
-Example:
-
-Human: what's the current price of ethereum?
-Thought: I need to check the price of ethereum, I can do that by using the Search tool
-Criticism: I should check the chat history first to see if I've already answered this question
-Action: Search
-Action Input: ethereum price
-
-Context:
-{{await 'context'}}
-
-Chat History:
-{{await 'history'}}
-
-Human: {{await 'query'}}
-Thought: {{gen 'thought' temperature=0.7}}
-Criticism: {{gen 'criticism' temperature=0.7}}
-Action: {{gen 'action' stop='Action Input:'}}
-Action Input: {{gen 'action_input' stop='Human:'}}
-"""
-
-DEFAULT_TOOL_PROMPT = """
-
-You called the {{tool}} tool to answer the query '{{query}}'.
-The {{tool}} tool returned the following answer:
-
-{{tool_output}}
-
-Please reword this answer to match your character, and add any additional information you think is relevant.
-
-{{gen 'answer'}}
-"""
-
 
 class Guide:
     def __init__(self, default_character: str):
@@ -102,13 +56,14 @@ class Guide:
         self._setup_planner()
         self.memory = Memory(kernel=self.guide)
         self.default_character = default_character
-        self._prompt_templates = PromptTemplate(default_character, DEFAULT_PROMPT)
         self.direct_responder = DirectResponse(self.guide, character=self.default_character)
         print("Guide initialised")
         
     def _setup_planner(self):
         print("Setting up the planner and plugins")
-        self.guide.import_skill(ScrapeTextSkill, "ScrapeText")
+        # self.guide.import_skill(ScrapeTextSkill, "ScrapeText")
+        if os.environ.get('WOLFRAM_ALPHA_APPID'):
+            self.guide.import_skill(WolframAlphaPlugin(wolfram_alpha_appid=os.environ.get('WOLFRAM_ALPHA_APPID')), "wolfram")
         self.guide.import_skill(MathSkill(), "math")
         self.guide.import_skill(FileIOSkill(), "fileIO")
         self.guide.import_skill(TimeSkill(), "time")
@@ -120,9 +75,6 @@ class Guide:
         # Define which tools the agent can use to answer user queries
         print("Setting up tools")
         tools = []
-        tools.append(Tool(name='Answer', func=lambda x: x, description="use when you already know the answer"))
-        tools.append(Tool(name='Clarify', func=lambda x: x, description="use when you need more information"))
-        tools.append(Tool(name='Plan', func=lambda x: Planner(self.guide).run(self.tools, x), description="use when the request is going to take multiple steps and/or tools to complete"))
         tools.append(Tool(name='Request', func=web_requests.scrape_text, description="use to make a request to a website, provide the url as action input"))
         # tools.append(WriteFileTool())
         # tools.append(ReadFileTool())
@@ -131,9 +83,6 @@ class Guide:
         #     self.apify = apify.ApifyTool()
         #     tools.append(Tool(name='Scrape', func=self.apify.scrape_website, description="use when you need to scrape a website, provide the url as action input"))
         #     tools.append(Tool(name='Lookup', func=self.apify.query, description="use when you need to check if you already know something, provide the query as action input"))
-        if os.environ.get('WOLFRAM_ALPHA_APPID'):
-            wolfram = WolframAlphaAPIWrapper()
-            tools.append(Tool(name="Wolfram", func=wolfram.run, description="use when you need to answer factual questions about math, science, society, the time or culture"))
         if os.environ.get('GOOGLE_API_KEY'):
             search = GoogleSearchAPIWrapper()
             tools.append(Tool(name="Search", func=search.run, description="use when you need to search for something on the internet"))
@@ -149,12 +98,19 @@ class Guide:
             response = ""
         return str(response)
     
+    async def rephrase(self, query: str, answer: str, history: str, history_context: str, session_id: str = 'static') -> str:
+        # Rephrase the text to match the character
+        # TODO: Is there a way to force calling a particular skill at the end of all other skills in the planner?
+        # If so, we could force rephrasing that way.
+        return await self.direct_responder.response(history_context, history, f'Please rephrase the answer "{answer}" to the query "{query}" according to your character', session_id=session_id)
+    
     async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], session_id: str='static', **kwargs) -> None:
         # Convert the prompt to character + history
         history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
         self.memory.add_message(role="Human", content=f'Human: {prompt}', session_id=session_id)
         response = await self._plan(prompt)
+        response = await self.rephrase(prompt, str(response), history, history_context, session_id=session_id)
         if not response:
             # If planning fails, try a chat
             response = await self.direct_responder.response(history_context, history, prompt, session_id=session_id)
@@ -163,7 +119,7 @@ class Guide:
         return callback(response)
 
     async def update_prompt_template(self, prompt: str, callback: Callable[[str], None], **kwargs) -> str:
-        self._prompt_templates.set(kwargs.get('session_id', 'static'), prompt)
+        self.direct_responder._prompt_templates.set(kwargs.get('session_id', 'static'), prompt)
         callback("Done")
         
     async def update_google_docs_token(self, token: str, callback: Callable[[str], None], session_id: str ='', **kwargs) -> str:
@@ -193,13 +149,11 @@ Answer: """
         self.character = character
         self._prompt_templates = PromptTemplate(self.character, self.prompt)
         
-    async def response(self, context: str, history: str, query: str, **kwargs) -> str:
-        session_id = kwargs.get('session_id', 'static')
+    async def response(self, context: str, history: str, query: str, session_id: Optional[str] = 'static', **kwargs) -> str:
         prompt = self._prompt_templates.get(session_id, self.kernel)
         ctx = self.kernel.create_new_context()
         ctx.variables['context'] = context
         ctx.variables['history'] = history
         ctx.variables['query'] = query
-        print(ctx.variables)
         response = await prompt.invoke_async(context=ctx)
         return str(response).strip()
