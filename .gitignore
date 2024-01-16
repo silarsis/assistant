@@ -4,3 +4,4 @@ volumes/*
 **/*.pyc
 **/.venv/
 credentials.json
+client/speech.mpeg
