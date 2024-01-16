@@ -25,6 +25,7 @@ class EchoClient(Widget):
     send_button = ObjectProperty(None)
     message_entry = ObjectProperty(None)
     response_text = ObjectProperty(None)
+    session_id_entry = ObjectProperty(None)
     hear_thoughts_button = ObjectProperty(None)
     
     def __init__(self, **kwargs):
@@ -33,7 +34,6 @@ class EchoClient(Widget):
         self._ending = False
         self.websocket = None
         self.hear_thoughts = False
-        self.session_id = 'client'
         self.talk = Talk() # Setup the talking thread
         self.listen = Listen(self.add_to_message_text) # Setup the listening thread
     
@@ -75,7 +75,7 @@ class EchoClient(Widget):
                 return
             
     def _actual_send(self, type='prompt', prompt='', command=''):
-        json_message = {'type':type, 'prompt':prompt, 'command':command, 'session_id':self.session_id}
+        json_message = {'type':type, 'prompt':prompt, 'command':command, 'session_id':self.session_id_entry.text}
         if self.hear_thoughts:
             json_message['hear_thoughts'] = True
         attempts = 0
