@@ -76,7 +76,6 @@ class MotorheadMemory:
             headers={"Content-Type": "application/json"},
         )
         res_data = res.json()
-        print(res_data)
         self.context[session_id] = res_data.get("context", "NONE")
         messages = res_data.get("messages", [])
         messages.reverse()
