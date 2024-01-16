@@ -18,6 +18,7 @@ from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
 
 from semantic_kernel.planning.action_planner import ActionPlanner
 from models.plugins.ScrapeText import ScrapeTextSkill
+from semantic_kernel.core_skills import FileIOSkill, MathSkill, TextSkill, TimeSkill
 
 from typing import List, Optional, Callable
 import os
@@ -108,6 +109,10 @@ class Guide:
     def _setup_planner(self):
         print("Setting up the planner and plugins")
         self.guide.import_skill(ScrapeTextSkill, "ScrapeText")
+        self.guide.import_skill(MathSkill(), "math")
+        self.guide.import_skill(FileIOSkill(), "fileIO")
+        self.guide.import_skill(TimeSkill(), "time")
+        self.guide.import_skill(TextSkill(), "text")
         self.planner = ActionPlanner(self.guide)
         print("Planner created")
         
@@ -135,24 +140,27 @@ class Guide:
         print(f"Tools: {[tool.name for tool in tools]}")
         return tools
     
-    async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], **kwargs) -> None:
-        response = await self.prompt(query=prompt, interim=callback, hear_thoughts=kwargs.get('hear_thoughts', False), session_id=kwargs.get('session_id', 'static'))
-        return callback(response)
+    async def _plan(self, goal: str) -> str:
+        try:
+            plan = await self.planner.create_plan_async(goal=goal)
+            response = await plan.invoke_async()
+        except Exception as e:
+            print(f"Planning failed: {e}")
+            response = ""
+        return str(response)
     
-    async def prompt(self, query: str, history: str="", interim: Optional[Callable[[str], None]]=None, session_id: str='static', hear_thoughts: bool=False, **kwargs) -> str:
-        if not history:
-            history = self.memory.get_formatted_history(session_id=session_id)
+    async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], session_id: str='static', **kwargs) -> None:
+        # Convert the prompt to character + history
+        history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
-        self.memory.add_message(role="Human", content=f'Human: {query}', session_id=session_id)
-        response = await self.direct_responder.response(
-            history_context, 
-            history, 
-            query, 
-            session_id=session_id
-        )
+        self.memory.add_message(role="Human", content=f'Human: {prompt}', session_id=session_id)
+        response = await self._plan(prompt)
+        if not response:
+            # If planning fails, try a chat
+            response = await self.direct_responder.response(history_context, history, prompt, session_id=session_id)
+        response = str(response)
         self.memory.add_message(role="AI", content=f"Response: {response}\n", session_id=session_id)
-        print(f"Response: {response}\n")
-        return response
+        return callback(response)
 
     async def update_prompt_template(self, prompt: str, callback: Callable[[str], None], **kwargs) -> str:
         self._prompt_templates.set(kwargs.get('session_id', 'static'), prompt)
