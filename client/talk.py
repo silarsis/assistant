@@ -31,13 +31,16 @@ class ElevenLabs:
         
     def say(self, text: str):
         print("Requesting TTS", flush=True)
-        audio_stream = elevenlabs.generate(text=f'... ... ... {text}', voice=self._voices[0], stream=self._stream)
-        # elevenlabs.play(audio_stream)
+        try:
+            audio_stream = elevenlabs.generate(text=text, voice=self._voices[0], stream=self._stream)
+        except elevenlabs.api.error.RateLimitError as err:
+            print(str(err), flush=True)
         if self._stream:
             try:
                 elevenlabs.stream(audio_stream)
             except ValueError:
                 # Raised if mpv can't be found
+                print("Disabling streaming (probably) because of lack of mpv")
                 self._stream = False
                 self.say(text)
         else:
