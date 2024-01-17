@@ -37,9 +37,12 @@ services:
     image: ghcr.io/chroma-core/chroma:latest
     container_name: chroma
     volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/chroma/chroma:/chroma
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/chroma/index_data:/index_data
+    command: uvicorn chromadb.app:app --reload --workers 1 --host 0.0.0.0 --port 6000
     environment:
       ANONYMIZED_TELEMETRY: False
+      IS_PERSISTENT: True
     ports:
       - 6000:8000
 
