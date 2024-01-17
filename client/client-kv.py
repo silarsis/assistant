@@ -60,7 +60,7 @@ class EchoClient(Widget):
                 for message in self.websocket:
                     try:
                         payload = json.loads(message)['payload']
-                    except:
+                    except json.decoder.JSONDecodeError:
                         print("Garbled message, ignoring...")
                     self.add_to_response_text(payload)
                     if self.listen.listening:
