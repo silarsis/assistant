@@ -1,7 +1,8 @@
 websockets
 SpeechRecognition
 PyAudio
-playsound==1.2.2
+# playsound==1.2.2
+preferredsoundplayer
 python-dotenv
 openai
 deepgram-sdk
