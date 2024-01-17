@@ -1,11 +1,9 @@
 ## Tools
 from langchain.agents import Tool
 from langchain_community.utilities import GoogleSearchAPIWrapper
-from langchain_openai import OpenAI
 # from models.tools import apify
 from models.tools.prompt_template import PromptTemplate
 from models.tools import web_requests
-from models.tools.google_docs import GoogleDocLoader
 from models.tools.memory import Memory
 
 # New semantic kernel setup
@@ -15,12 +13,12 @@ from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
 from semantic_kernel.planning.action_planner import ActionPlanner
 # from models.plugins.ScrapeText import ScrapeTextSkill
 from models.plugins.WolframAlpha import WolframAlphaPlugin
+from models.plugins.GoogleDocs import GoogleDocLoaderPlugin
 from semantic_kernel.core_skills import FileIOSkill, MathSkill, TextSkill, TimeSkill
 
 from typing import List, Optional, Callable
 import os
 import json
-from pydantic import create_model
 
 
 def getKernel(model: Optional[str] = "") -> sk.Kernel:
@@ -35,7 +33,6 @@ def getKernel(model: Optional[str] = "") -> sk.Kernel:
         kernel.add_chat_service("dv", AzureChatCompletion(deployment, endpoint, api_key=api_key))
     else:
         print("OpenAI")
-        # api_key, org_id = sk.openai_settings_from_dot_env()
         if endpoint:
             # Need to use a different connector here to connect to the custom endpoint
             from semantic_kernel.connectors.ai.open_ai.services.open_ai_chat_completion import AsyncOpenAI, OpenAIChatCompletion
@@ -52,7 +49,6 @@ class Guide:
     def __init__(self, default_character: str):
         print("Initialising Guide")
         self.guide = getKernel()
-        self._google_docs = GoogleDocLoader(llm=OpenAI(temperature=0.4))
         self._setup_planner()
         self.memory = Memory(kernel=self.guide)
         self.default_character = default_character
@@ -62,6 +58,8 @@ class Guide:
     def _setup_planner(self):
         print("Setting up the planner and plugins")
         # self.guide.import_skill(ScrapeTextSkill, "ScrapeText")
+        self._google_docs = GoogleDocLoaderPlugin(kernel=self.guide)
+        self.guide.import_skill(self._google_docs, "gdoc")
         if os.environ.get('WOLFRAM_ALPHA_APPID'):
             self.guide.import_skill(WolframAlphaPlugin(wolfram_alpha_appid=os.environ.get('WOLFRAM_ALPHA_APPID')), "wolfram")
         self.guide.import_skill(MathSkill(), "math")
@@ -76,9 +74,6 @@ class Guide:
         print("Setting up tools")
         tools = []
         tools.append(Tool(name='Request', func=web_requests.scrape_text, description="use to make a request to a website, provide the url as action input"))
-        # tools.append(WriteFileTool())
-        # tools.append(ReadFileTool())
-        tools.append(Tool(name='LoadDocument', func=self._google_docs.load_doc, description="use to load a document, provide the document id as action input", args_schema=create_model('LoadDocumentModel', tool_input='', session_id='')))
         # if os.environ.get('APIFY_API_TOKEN'):
         #     self.apify = apify.ApifyTool()
         #     tools.append(Tool(name='Scrape', func=self.apify.scrape_website, description="use when you need to scrape a website, provide the url as action input"))
