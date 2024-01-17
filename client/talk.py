@@ -1,5 +1,6 @@
 import os
-from playsound import playsound, PlaysoundException
+# from playsound import playsound, PlaysoundException
+from preferredsoundplayer import playsound
 import queue
 import threading
 from dotenv import load_dotenv
@@ -24,13 +25,13 @@ class ElevenLabs:
         elevenlabs.save(audio=audio_stream, filename=filename)
         try:
             playsound("speech.mpeg", True)
-        except PlaysoundException:
-            print("Failed to play sound", flush=True)
+        except Exception as e:
+            print(f"Failed to play sound: {e}", flush=True)
         os.remove("speech.mpeg")
         
         
     def say(self, text: str):
-        print("Requesting TTS", flush=True)
+        print("Requesting TTS from ElevenLabs", flush=True)
         try:
             audio_stream = elevenlabs.generate(text=text, voice=self._voices[0], stream=self._stream)
         except elevenlabs.api.error.RateLimitError as err:
@@ -38,7 +39,7 @@ class ElevenLabs:
         if self._stream:
             try:
                 elevenlabs.stream(audio_stream)
-            except ValueError:
+            except (ValueError, BrokenPipeError):
                 # Raised if mpv can't be found
                 print("Disabling streaming (probably) because of lack of mpv")
                 self._stream = False
@@ -50,6 +51,7 @@ class ElevenLabs:
 class TTS:
     def say(self, text: str):
         q_text = quote(text)
+        print("Requesting TTS from Local TTS instance", flush=True)
         with requests.get(f"http://localhost:5002/api/tts?text={q_text}&speaker_id=p364&style_wav=&language_id=", stream=True) as wav:
             p = pyaudio.PyAudio()
             
