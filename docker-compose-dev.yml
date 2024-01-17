@@ -1,9 +1,0 @@
-version: '3.5'
-services:
-  agent: # The new agent, no actual llm required
-    volumes:
-      - ./agent:/app:cached
-
-  webui: # The (currently web) interface for the assistant
-    volumes:
-      - ./webui:/app:cached

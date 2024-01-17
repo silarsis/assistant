@@ -25,6 +25,8 @@ services:
 
   # The web interface for the assistant
   webui:
+    profiles:
+      - webui
     build: ./webui
     container_name: webui
     ports:
@@ -45,16 +47,20 @@ services:
       - 6000:8000
 
   # https://tts.readthedocs.io/en/latest/ - the voice of the assistant
-  # tts:
-  #   container_name: tts
-  #   # image: ghcr.io/coqui-ai/tts-cpu:latest
-  #   image: synesthesiam/mozillatts:en
-  #   # entrypoint: python3 TTS/server/server.py --model_name tts_models/en/vctk/vits
-  #   ports:
-  #     - "5002:5002"
+  tts:
+    profiles:
+      - tts
+    container_name: tts
+    # image: ghcr.io/coqui-ai/tts-cpu:latest
+    image: synesthesiam/mozillatts:en
+    # entrypoint: python3 TTS/server/server.py --model_name tts_models/en/vctk/vits
+    ports:
+      - "5002:5002"
 
   # Motorhead for memory for the chat and responses
   motorhead:
+    profiles:
+      - motorhead
     container_name: motorhead
     image: ghcr.io/getmetal/motorhead:latest
     ports:
@@ -69,6 +75,8 @@ services:
 
   # Backing store for motorhead
   redis:
+    profiles:
+      - motorhead
     container_name: redis
     image: redis/redis-stack:latest
     restart: always
