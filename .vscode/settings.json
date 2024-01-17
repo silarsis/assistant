@@ -1,0 +1,5 @@
+{
+    "terminal.integrated.env.osx": {
+        "COMPOSE_PROFILES": "tts"
+    }
+}
