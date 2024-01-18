@@ -148,12 +148,11 @@ class EchoClient(Widget):
         
     def google_login(self):
         if not self._credentials:
-            with open('credentials.json') as f:
-                client_secret = json.load(f)
             self._credentials = google_auth_oauthlib.get_user_credentials(
                 ["https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/documents.readonly"], 
-                client_secret['installed']['client_id'], 
-                client_secret['installed']['client_secret'])
+                # app desktop credentials
+                '438635256773-rf4rmv51lo436a576enb74t7pc9n8rre.apps.googleusercontent.com', 
+                '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')
         self._actual_send(
             type='system', 
             command='update_google_docs_token', 
@@ -173,6 +172,6 @@ if __name__ == '__main__':
         c.run()
     except KeyboardInterrupt:
         c.stop()
-    except:
+    except Exception:
         c.stop()
         raise
