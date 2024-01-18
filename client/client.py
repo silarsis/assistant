@@ -109,7 +109,7 @@ class Application(tk.Frame):
             self.connect_button.configure(state=tk.NORMAL)
             self.send_button.configure(state=tk.DISABLED)
             self.message_entry.configure(state=tk.DISABLED)
-        except:
+        except Exception:
             pass
     
     def connect(self):
@@ -178,8 +178,8 @@ class Application(tk.Frame):
                 for message in self.websocket:
                     try:
                         payload = json.loads(message)['payload']
-                    except:
-                        print("Garbled message, ignoring...")
+                    except json.decoder.JSONDecodeError as e:
+                        print(f"Garbled message, ignoring: {e}")
                     self.response_text.after(1, self.add_to_response_text, payload)
                     if self.listen.listening:
                         self.talk.say(self.toggle_listening, payload, self.toggle_listening) # Stop listening, say the response, then start listening again
@@ -204,5 +204,6 @@ root = tk.Tk()
 app = Application(root)
 try:
     app.mainloop()
-except:
+except Exception as e:
+    print(str(e))
     app.quit()
