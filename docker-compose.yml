@@ -72,6 +72,7 @@ services:
       - OPENAI_API_KEY
     depends_on:
       - "redis"
+    restart: always
 
   # Backing store for motorhead
   redis:
