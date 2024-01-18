@@ -2,7 +2,7 @@ from typing import Any, Callable
 
 from pydantic import BaseModel
 
-from semantic_kernel.skill_definition import sk_function
+from semantic_kernel.skill_definition import sk_function, sk_function_context_parameter
 from semantic_kernel.orchestration.sk_context import SKContext
 
 from googleapiclient.discovery import build
@@ -107,8 +107,13 @@ class GoogleDocLoaderPlugin(BaseModel):
         name="load_doc",
         input_description="The Google Doc ID"
     )
+    @sk_function_context_parameter(
+        name="session_id",
+        description="Session ID"
+    )
     def load_doc(self, docid: str, context: SKContext, session_id: str = 'static', interim: Callable=None) -> str:
         creds = self._tokens.get(session_id, None)
+        print(f"creds: {creds}; session_id: {session_id}")
         if not creds:
             return "No token found"
         if docid.startswith('http'):

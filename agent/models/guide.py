@@ -21,6 +21,8 @@ import os
 import json
 
 
+DEFAULT_SESSION_ID = 'static'
+
 def getKernel(model: Optional[str] = "") -> sk.Kernel:
     kernel = sk.Kernel()
     deployment = os.environ.get('OPENAI_DEPLOYMENT_NAME', "")
@@ -84,23 +86,23 @@ class Guide:
         print(f"Tools: {[tool.name for tool in tools]}")
         return tools
     
-    async def _plan(self, goal: str, callback: Callable[[str], None]) -> str:
+    async def _plan(self, goal: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID) -> str:
         try:
             plan = await self.planner.create_plan_async(goal=goal)
-            print(plan, flush=True)
+            plan.state['session_id'] = session_id
             response = await plan.invoke_async()
         except Exception as e:
             print(f"Planning failed: {e}")
             response = ""
         return str(response)
     
-    async def rephrase(self, query: str, answer: str, history: str, history_context: str, session_id: str = 'static') -> str:
+    async def rephrase(self, query: str, answer: str, history: str, history_context: str, session_id: str = DEFAULT_SESSION_ID) -> str:
         # Rephrase the text to match the character
         # TODO: Is there a way to force calling a particular skill at the end of all other skills in the planner?
         # If so, we could force rephrasing that way.
         return await self.direct_responder.response(history_context, history, f'Please rephrase the answer "{answer}" to the query "{query}" according to your character', session_id=session_id)
     
-    async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], session_id: str='static', **kwargs) -> None:
+    async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], session_id: str=DEFAULT_SESSION_ID, **kwargs) -> None:
         # Convert the prompt to character + history
         history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
@@ -115,7 +117,7 @@ class Guide:
         return callback(response)
 
     async def update_prompt_template(self, prompt: str, callback: Callable[[str], None], **kwargs) -> str:
-        self.direct_responder._prompt_templates.set(kwargs.get('session_id', 'static'), prompt)
+        self.direct_responder._prompt_templates.set(kwargs.get('session_id', DEFAULT_SESSION_ID), prompt)
         callback("Done")
         
     async def update_google_docs_token(self, token: str, callback: Callable[[str], None], session_id: str ='', **kwargs) -> str:
@@ -145,7 +147,7 @@ Answer: """
         self.character = character
         self._prompt_templates = PromptTemplate(self.character, self.prompt)
         
-    async def response(self, context: str, history: str, query: str, session_id: Optional[str] = 'static', **kwargs) -> str:
+    async def response(self, context: str, history: str, query: str, session_id: Optional[str] = DEFAULT_SESSION_ID, **kwargs) -> str:
         prompt = self._prompt_templates.get(session_id, self.kernel)
         ctx = self.kernel.create_new_context()
         ctx.variables['context'] = context
