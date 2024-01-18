@@ -112,6 +112,7 @@ class GoogleDocLoaderPlugin(BaseModel):
         description="Session ID"
     )
     def load_doc(self, docid: str, context: SKContext, session_id: str = 'static', interim: Callable=None) -> str:
+        print(f"Debug: {docid}")
         creds = self._tokens.get(session_id, None)
         print(f"creds: {creds}; session_id: {session_id}")
         if not creds:
