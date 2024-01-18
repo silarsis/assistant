@@ -9,8 +9,8 @@ from models.tools.memory import Memory
 # New semantic kernel setup
 import semantic_kernel as sk
 from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
+from semantic_kernel.planning.stepwise_planner import StepwisePlanner
 
-from semantic_kernel.planning.action_planner import ActionPlanner
 # from models.plugins.ScrapeText import ScrapeTextSkill
 from models.plugins.WolframAlpha import WolframAlphaPlugin
 from models.plugins.GoogleDocs import GoogleDocLoaderPlugin
@@ -68,7 +68,7 @@ class Guide:
         self.guide.import_skill(FileIOSkill(), "fileIO")
         self.guide.import_skill(TimeSkill(), "time")
         self.guide.import_skill(TextSkill(), "text")
-        self.planner = ActionPlanner(self.guide)
+        self.planner = StepwisePlanner(self.guide)
         print("Planner created")
         
     def _setup_tools(self) -> List[Tool]:
@@ -88,9 +88,10 @@ class Guide:
     
     async def _plan(self, goal: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID) -> str:
         try:
-            plan = await self.planner.create_plan_async(goal=goal)
-            plan.state['session_id'] = session_id
-            response = await plan.invoke_async()
+            plan = self.planner.create_plan(goal=goal)
+            context = self.guide.create_new_context()
+            context.variables.set('session_id', session_id)
+            response = await plan.invoke_async(context=context)
         except Exception as e:
             print(f"Planning failed: {e}")
             response = ""

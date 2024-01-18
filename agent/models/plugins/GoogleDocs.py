@@ -11,8 +11,10 @@ from google.oauth2.credentials import Credentials
 from langchain_openai import OpenAIEmbeddings
 from langchain.chains.summarize import load_summarize_chain
 from langchain.docstore.document import Document
+
 import chromadb
 from chromadb.config import Settings
+from chromadb.utils import embedding_functions
 
 import re
 import os
@@ -21,6 +23,7 @@ import time
 CHROMADB_HOST = 'chroma'
 CHROMADB_PORT = '8000'
 
+DEFAULT_EF = embedding_functions.DefaultEmbeddingFunction()
 
 class GoogleDocLoaderPlugin(BaseModel):
     kernel: Any = None
@@ -80,8 +83,9 @@ class GoogleDocLoaderPlugin(BaseModel):
         cache_key = self._cache_key(collection_name)
         if cache_key not in self._vector_stores:
             self._vector_stores[cache_key] = self._chroma_client.create_collection(
-                embedding_function=self._embeddings,
-                name=cache_key
+                # embedding_function=self._embeddings,
+                embedding_function=DEFAULT_EF,
+                name=cache_key, get_or_create=True
             )
         return self._vector_stores[cache_key]
     
@@ -109,10 +113,14 @@ class GoogleDocLoaderPlugin(BaseModel):
     )
     @sk_function_context_parameter(
         name="session_id",
-        description="Session ID"
+        description="Session ID",
+        default_value="static"
     )
-    def load_doc(self, docid: str, context: SKContext, session_id: str = 'static', interim: Callable=None) -> str:
+    def load_doc(self, docid: str, context: SKContext, interim: Callable=None) -> str:
         print(f"Debug: {docid}")
+        session_id = context.variables.get('session_id')
+        # Hard code for now while I work this out
+        session_id = 'client'
         creds = self._tokens.get(session_id, None)
         print(f"creds: {creds}; session_id: {session_id}")
         if not creds:
