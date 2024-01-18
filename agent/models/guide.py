@@ -98,6 +98,7 @@ class Guide:
         # Rephrase the text to match the character
         # TODO: Is there a way to force calling a particular skill at the end of all other skills in the planner?
         # If so, we could force rephrasing that way.
+        # The rephrase question here sometimes generates an odd sort of response, should think about phrasing that better.
         return await self.direct_responder.response(history_context, history, f'Please rephrase the answer "{answer}" to the query "{query}" according to your character', session_id=session_id)
     
     async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], session_id: str='static', **kwargs) -> None:

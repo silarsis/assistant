@@ -108,6 +108,7 @@ class GoogleDocLoaderPlugin(BaseModel):
         input_description="The Google Doc ID"
     )
     def load_doc(self, docid: str, context: SKContext, session_id: str = 'static', interim: Callable=None) -> str:
+        print(f"Debug: {docid}")
         creds = self._tokens.get(session_id, None)
         if not creds:
             return "No token found"
