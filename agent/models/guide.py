@@ -84,9 +84,10 @@ class Guide:
         print(f"Tools: {[tool.name for tool in tools]}")
         return tools
     
-    async def _plan(self, goal: str) -> str:
+    async def _plan(self, goal: str, callback: Callable[[str], None]) -> str:
         try:
             plan = await self.planner.create_plan_async(goal=goal)
+            print(plan, flush=True)
             response = await plan.invoke_async()
         except Exception as e:
             print(f"Planning failed: {e}")
@@ -104,7 +105,7 @@ class Guide:
         history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
         self.memory.add_message(role="Human", content=f'Human: {prompt}', session_id=session_id)
-        response = await self._plan(prompt)
+        response = await self._plan(prompt, callback=callback)
         response = await self.rephrase(prompt, str(response), history, history_context, session_id=session_id)
         if not response:
             # If planning fails, try a chat
