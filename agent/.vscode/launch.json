@@ -1,0 +1,13 @@
+{
+    // This is here specifically for debugging in the agent container
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Attach to the Agent",
+            "type": "debugpy",
+            "request": "attach",
+            "processId": 1,
+            "justMyCode": true
+        }
+    ]
+}
