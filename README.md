@@ -12,6 +12,8 @@ If you have API keys for various things, you can look at the .env-template files
 keys or configurations as needed. You can find them in each of the sub-directories from the main dir. The critical one
 is the one in the root of the project.
 
+There are multiple profiles in the docker-compose file - if you want to run a local text to speech, for instance, you can use `docker compose --profile tts` for build and up commands, if you want persistent memory for conversation add `motorhead`.
+
 To run the client, cd into the client/ directory and run `pip install -r requirements.txt` followed by `python ./client-kv.py`
 
 ## Goals
