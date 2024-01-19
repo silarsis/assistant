@@ -10,6 +10,7 @@ openai
 google-api-python-client
 wolframalpha
 # transformers[agents]
+sentence-transformers
 bs4
 certifi
 apify-client

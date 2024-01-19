@@ -8,7 +8,6 @@ from semantic_kernel.orchestration.sk_context import SKContext
 from googleapiclient.discovery import build
 # import to provide google.auth.credentials.Credentials
 from google.oauth2.credentials import Credentials
-from langchain_openai import OpenAIEmbeddings
 from langchain.chains.summarize import load_summarize_chain
 from langchain.docstore.document import Document
 
@@ -17,13 +16,11 @@ from chromadb.config import Settings
 from chromadb.utils import embedding_functions
 
 import re
-import os
 import time
 
 CHROMADB_HOST = 'chroma'
 CHROMADB_PORT = '8000'
 
-DEFAULT_EF = embedding_functions.DefaultEmbeddingFunction()
 
 class GoogleDocLoaderPlugin(BaseModel):
     kernel: Any = None
@@ -32,10 +29,10 @@ class GoogleDocLoaderPlugin(BaseModel):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        if os.environ.get('OPENAI_API_TYPE') == 'azure':
-            self._embeddings = None
-        else:
-            self._embeddings = OpenAIEmbeddings(model="ada")
+        self._embeddings = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+        self._summarize_prompt = self.kernel.create_semantic_function(
+            prompt_template="Please write a short summary of the following: {{$content}}", 
+            max_tokens=2000, temperature=0.2, top_p=0.5)
         while True:
             try:
                 self._chroma_client = chromadb.HttpClient(
@@ -83,8 +80,7 @@ class GoogleDocLoaderPlugin(BaseModel):
         cache_key = self._cache_key(collection_name)
         if cache_key not in self._vector_stores:
             self._vector_stores[cache_key] = self._chroma_client.create_collection(
-                # embedding_function=self._embeddings,
-                embedding_function=DEFAULT_EF,
+                embedding_function=self._embeddings,
                 name=cache_key, get_or_create=True
             )
         return self._vector_stores[cache_key]
@@ -101,10 +97,15 @@ class GoogleDocLoaderPlugin(BaseModel):
         return elements
     
     def _summarize_elements(self, elements: list) -> str:
-        chain = load_summarize_chain(self._llm, chain_type="map_reduce")
         docs = [Document(page_content=t) for t in elements]
-        summary = chain.run(input_documents=docs, question="Write a summary within 200 words.")
-        return summary
+        context = self.kernel.create_new_context()
+        summaries = []
+        for doc in docs:
+            context.variables.set('content', doc.page_content)
+            summaries.append(self._summarize_prompt(context=context))
+        context.variables.set('content', "\n".join(summaries))
+        summary = self._summarize_prompt(context=context)
+        return str(summary)
 
     @sk_function(
         description="Load a Google Doc into the vector store",
