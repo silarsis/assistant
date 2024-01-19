@@ -1,7 +1,6 @@
 # Assistant
 
 This project is to tie together various LLM-related pieces, to try and build an AI assistant that can research and provide feedback on things I'm working on.
-It is very heavily inspired by autogpt, but with a different purpose and structure and overall features
 
 ## How to Use
 
@@ -11,11 +10,9 @@ keys for that, as well as for whatever tools are setup in the tools list.
 
 If you have API keys for various things, you can look at the .env-template files - rename them to .env and add
 keys or configurations as needed. You can find them in each of the sub-directories from the main dir. The critical one
-is the one in `agent/`
+is the one in the root of the project.
 
-To run the client, cd into the client/ directory and run `pip install -r requirements.txt` followed by `python ./client.py`
-If the client gives you errors on pip install regarding `portaudio.h`, then check https://stackoverflow.com/a/65411355
-If you get a "may not be configured for Tk" error when running, please refer to https://stackoverflow.com/q/5459444
+To run the client, cd into the client/ directory and run `pip install -r requirements.txt` followed by `python ./client-kv.py`
 
 ## Goals
 
@@ -36,11 +33,11 @@ Beyond the above, this repo is for experimentation and to help me understand thi
 `agent` is the nexus, runs the websocket and connections to the other models. This one is where
 most of the development will happen, and will be the entry point for cli-based use.
 
-`webui` provides a basic web interface, and sends messages to the gpt4all container
+`webui` provides a basic web interface, and sends messages to the gpt4all container.
 
-`dalai` is an alternate model for me to ensure that I've appropriate abstracted the models
+`motorhead` and `redis` for conversational memory made more persistent.
 
-`milvus` is a vector database I believe I'll eventually need as a memory - it's a replacement for pinecone in the autogpt setup
+`chroma` for a persistent chromadb for document stores.
 
 ## Process
 
@@ -58,8 +55,10 @@ Other projects that have been an inspiration include:
 
 There is a python client that most of the development happens on. To run it:
 
+```
 pip install -r client/requirements.txt
 python ./client/client-kv.py
+```
 
 It will use the same env variable file as the rest, .env in the top level directory. It can listen and talk.
 
