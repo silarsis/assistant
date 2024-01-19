@@ -3,6 +3,7 @@ import threading
 import time
 from dotenv import load_dotenv
 import speech_recognition as sr
+import whisper
 
 if os.environ.get('DEEPGRAM_API_KEY'):
     from deepgram import Deepgram
@@ -17,6 +18,7 @@ class Listen:
         self._ending = False
         self.listening = False
         self.started_listening = self.stopped_listening = time.time()
+        self.model = whisper.load_model("base")
         thread = threading.Thread(target=self.listen)
         thread.start()
         
@@ -63,8 +65,14 @@ class Listen:
                         response = deepgram.transcription.sync_prerecorded(audio_data, {'punctuate': True})
                         print(response)
                         text = response['results']['channels'][0]['alternatives'][0]['transcript']
-                    elif os.environ.get('OPENAI_API_KEY'):
-                        text = r.recognize_whisper_api(audio, api_key=os.environ.get('OPENAI_API_KEY'))
+                    else:
+                        audio = whisper.pad_or_trim(audio)
+                        mel = whisper.log_mel_spectrogram(audio).to(self.model.device)
+                        _, probs = self.model.detect_language(mel)
+                        print(f"Detected language: {max(probs, key=probs.get)}")
+                        options = whisper.DecodingOptions()
+                        result = whisper.decode(self.model, mel, options)
+                        text = result.text
                     text = str(text)
                     print(f"Recognized: {text}")
                     self.callback(text)

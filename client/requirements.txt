@@ -10,3 +10,4 @@ elevenlabs
 mpv
 ffmpeg
 kivy
+openai-whisper
