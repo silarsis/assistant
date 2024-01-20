@@ -138,6 +138,7 @@ class EchoClient(Widget):
     def add_to_message_text(self, text: str) -> None:
         " Called to add text to the request box when it's translated from audio (in the listen thread) "
         self.message_entry.text = text
+        self.send()
             
     def quit(self):
         print("Quitting")
