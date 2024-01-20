@@ -48,8 +48,6 @@ services:
 
   # https://tts.readthedocs.io/en/latest/ - the voice of the assistant
   tts:
-    profiles:
-      - tts
     container_name: tts
     # image: ghcr.io/coqui-ai/tts-cpu:latest
     image: synesthesiam/mozillatts:en
@@ -59,8 +57,6 @@ services:
 
   # Motorhead for memory for the chat and responses
   motorhead:
-    profiles:
-      - motorhead
     container_name: motorhead
     image: ghcr.io/getmetal/motorhead:latest
     ports:
@@ -76,8 +72,6 @@ services:
 
   # Backing store for motorhead
   redis:
-    profiles:
-      - motorhead
     container_name: redis
     image: redis/redis-stack:latest
     restart: always
