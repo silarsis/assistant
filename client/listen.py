@@ -48,14 +48,10 @@ class Listen:
     def _bg_listener_callback(self, recognizer, audio):
         " This is called by the background listener when it hears something "
         if not self.listening: # This can accidentally drop some audio, but it's better than nothing
-            # Worse, it will sometimes let things through that shouldn't. Need to work out the
-            # length of time the audio sample is for and ignore if it started before we stopped.
-            print("Ignoring audio because we're not listening")
             return
         audio_length = len(audio.get_raw_data()) / audio.sample_width / audio.sample_rate
         print(f"Got audio of length {audio_length} seconds")
         if time.time() - audio_length < self.started_listening:
-            print("Ignoring audio because it started before we started listening")
             return
         self.data_queue.put(audio.get_raw_data())
         
