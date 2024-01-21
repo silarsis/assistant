@@ -12,7 +12,7 @@ class WolframAlphaPlugin(BaseModel):
     wolfram_alpha_appid: Optional[str] = None
         
     @sk_function(
-        description="Query WolframAlpha for factual questions about math, science, society, the time or culture",
+        description="Query Wolfram Alpha for factual or general knowledge questions, math, current events, news headlines, or expert-level answers on topics ranging from science, culture, and history to sports, geography, weather, and more.",
         name="wolfram",
         input_description="The question you want to ask"
     )
