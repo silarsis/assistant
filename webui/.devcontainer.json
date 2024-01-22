@@ -1,9 +1,0 @@
-{
-    "name": "webui",
-    "dockerComposeFile": ["../docker-compose.yml", "../docker-compose-dev.yml"],
-    "service": "webui",
-    "shutdownAction": "none",
-    "workspaceFolder": "/app"
-  }
-
-  // https://code.visualstudio.com/remote/advancedcontainers/connect-multiple-containers
