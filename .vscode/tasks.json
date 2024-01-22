@@ -15,13 +15,13 @@
         {
             "label": "Up",
             "type": "shell",
-            "command": "docker-compose up",
+            "command": "docker-compose up -d",
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
             "presentation": {
-                "panel": "new",
+                "panel": "dedicated",
                 "showReuseMessage": false
             }
         },

@@ -18,6 +18,17 @@
                     "remoteRoot": "."
                 }
             ]
+        },
+        {
+            "name": "Python:Streamlit",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "streamlit",
+            "args": [
+                "run",
+                "${file}"
+            ],
+            "justMyCode": false
         }
     ]
 }
