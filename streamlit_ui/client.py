@@ -1,6 +1,7 @@
 import json
 import os
 import base64
+import time
 
 from websockets.sync.client import connect, ClientConnection
 
@@ -21,7 +22,14 @@ class WSConnection(ExperimentalBaseConnection[ClientConnection]):
 
     # send sends a formatted message to the websocket.
     def _connect(self, **kwargs) -> ClientConnection:
-        con = connect(st.session_state.uri)
+        while True:
+            try:
+                con = connect(st.session_state.uri)
+                st.info("Connected to assistant at " + st.session_state.uri)
+                break
+            except ConnectionError:
+                st.error("Connection error. Retrying...")
+                time.sleep(2)
         return con
 
     def recv(self):
@@ -103,11 +111,17 @@ def main():
     Calls prompt() to get user input and display assistant responses in the chat UI.
     """
     st.title("Echo AI Assistant")
-    st.sidebar.text_input("LLM API URI", key="uri", value="ws://localhost:10000")
-    st.sidebar.text_input("session_id", key="session_id", value="client")
-    st.sidebar.checkbox("Hear Thoughts", key="hear_thoughts")
-    st.sidebar.checkbox("Speak", key="speak", value=True)
+    with st.sidebar.expander("Connection Parameters"):
+        st.text_input("LLM API URI", key="uri", value="ws://localhost:10000")
+        st.text_input("session_id", key="session_id", value="client")
+    with st.sidebar.expander("Interface Options"):
+        st.checkbox("Hear Thoughts", key="hear_thoughts")
+        st.checkbox("Speak", key="speak", value=True)
+        st.checkbox("Listen (not working yet)", key="listen", value=False)
 
+    # Connect to our backend agent
+    ws_connection = WSConnection("agent")
+    
     # Next bits are from https://docs.streamlit.io/knowledge-base/tutorials/build-conversational-apps#build-a-simple-chatbot-gui-with-streaming
     # Store and display messages so far
     if "messages" not in st.session_state:
@@ -116,7 +130,6 @@ def main():
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    ws_connection = WSConnection("OpenAI")
     prompt(ws_connection)
 
 
