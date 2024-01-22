@@ -75,10 +75,10 @@ def receive(ws_connection):
     with st.chat_message("assistant"):
         st.markdown(payload)
         st.session_state.messages.append({"role": "assistant", "content": payload})
-        audio_stream = elevenlabs_get_stream(text=payload)
-        audio_bytes = b"".join([bytes(a) for a in audio_stream])
-        st.markdown(f'<audio autoplay src="data:audio/mp3;base64,{base64.b64encode(audio_bytes).decode()}" type="audio/mp3"></audio>', unsafe_allow_html=True)
-        # st.audio(audio_bytes), sample_rate=44100, format="audio/mp3")
+        if st.session_state.speak:
+            audio_stream = elevenlabs_get_stream(text=payload)
+            audio_bytes = b"".join([bytes(a) for a in audio_stream])
+            st.markdown(f'<audio autoplay src="data:audio/mp3;base64,{base64.b64encode(audio_bytes).decode()}" type="audio/mp3"></audio>', unsafe_allow_html=True)
 
 def prompt(ws_connection):
     # Prompts user for input, displays input in chat UI,
@@ -106,6 +106,7 @@ def main():
     st.sidebar.text_input("LLM API URI", key="uri", value="ws://localhost:10000")
     st.sidebar.text_input("session_id", key="session_id", value="client")
     st.sidebar.checkbox("Hear Thoughts", key="hear_thoughts")
+    st.sidebar.checkbox("Speak", key="speak", value=True)
 
     # Next bits are from https://docs.streamlit.io/knowledge-base/tutorials/build-conversational-apps#build-a-simple-chatbot-gui-with-streaming
     # Store and display messages so far
