@@ -102,7 +102,7 @@ class Guide:
         # TODO: Is there a way to force calling a particular skill at the end of all other skills in the planner?
         # If so, we could force rephrasing that way.
         # The rephrase question here sometimes generates an odd sort of response, should think about phrasing that better.
-        return await self.direct_responder.response(history_context, history, f'Please rephrase the answer "{answer}" to the query "{query}" according to your character', session_id=session_id)
+        return await self.direct_responder.response(history_context, history, f'You were asked "{query}" and you worked out the answer to be "{answer}". Please respond to the user with this information directly.', session_id=session_id)
     
     async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], session_id: str=DEFAULT_SESSION_ID, **kwargs) -> None:
         # Convert the prompt to character + history
