@@ -23,17 +23,6 @@ services:
       - WOLFRAM_ALPHA_APPID
       - APIFY_API_TOKEN
 
-  # The web interface for the assistant
-  webui:
-    profiles:
-      - webui
-    build: ./webui
-    container_name: webui
-    ports:
-      - "3000:3000"
-    environment:
-      GPT4ALL_HOST: gpt4all
-
   # A document store for memory for the assistant
   chroma:
     image: ghcr.io/chroma-core/chroma:latest
