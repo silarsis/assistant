@@ -33,21 +33,6 @@
                 "kind": "build",
                 "isDefault": true
             }
-        },
-        {
-            "label": "Run Client",
-            "type": "shell",
-            "command": "cd client && python ./client-kv.py",
-            "group": {
-                // Putting this in build because it has a hotkey I remember
-                "kind": "build",
-                "isDefault": true
-            },
-            "presentation": {
-                "panel": "dedicated",
-                "showReuseMessage": false,
-                "clear": true
-            }
         }
     ]
 }
