@@ -12,7 +12,6 @@ import google_auth_oauthlib
 class WSConnection(ExperimentalBaseConnection[ClientConnection]):
     def _connect(self, **kwargs) -> ClientConnection:
         con = connect(st.session_state.uri)
-        google_auth_oauthlib(con)
         return con
     
     def recv(self):
@@ -25,7 +24,7 @@ class WSConnection(ExperimentalBaseConnection[ClientConnection]):
         print(f"received {payload}")
         return payload
     
-    def send(self, mesg_type: str = 'prompt', mesg: str = ''):
+    def send(self, mesg_type: str = 'prompt', mesg: str = '', command: str = ''):
         json_message = {'type':mesg_type, 'prompt':mesg, 'command':'', 'session_id':st.session_state.session_id}
         if st.session_state.hear_thoughts:
             json_message['hear_thoughts'] = True
@@ -39,9 +38,9 @@ def google_login(ws_connection):
             '438635256773-rf4rmv51lo436a576enb74t7pc9n8rre.apps.googleusercontent.com', 
             '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')
     ws_connection.send(
-        type='system', 
+        mesg_type='system', 
         command='update_google_docs_token', 
-        prompt=st.session_state._credentials.to_json())
+        mesg=st.session_state._credentials.to_json())
     
 def receive(ws_connection):
     payload = ws_connection.recv()
