@@ -1,4 +1,6 @@
 import json
+import os
+import base64
 
 from websockets.sync.client import connect, ClientConnection
 
@@ -6,6 +8,8 @@ import streamlit as st
 from streamlit.connections import ExperimentalBaseConnection
 
 import google_auth_oauthlib
+
+import elevenlabs
 
 class WSConnection(ExperimentalBaseConnection[ClientConnection]):
     # WSConnection handles the websocket connection to the assistant server.
@@ -35,7 +39,16 @@ class WSConnection(ExperimentalBaseConnection[ClientConnection]):
         if st.session_state.hear_thoughts:
             json_message["hear_thoughts"] = True
         self._instance.send(json.dumps(json_message))
-            
+
+def elevenlabs_get_stream(text: str = '') -> bytes:
+    elevenlabs.set_api_key(os.environ.get('ELEVENLABS_API_KEY'))
+    voices = [os.environ.get('ELEVENLABS_VOICE_1_ID'), os.environ.get('ELEVENLABS_VOICE_2_ID')]
+    try:
+        audio_stream = elevenlabs.generate(text=text, voice=voices[0], stream=True)
+    except elevenlabs.api.error.RateLimitError as err:
+        print(str(err), flush=True)
+    return audio_stream
+
 def google_login(ws_connection):
     # Gets user credentials for Google OAuth and sends them to the websocket
     # connection to authorize access to Google Drive and Docs APIs.
@@ -48,7 +61,6 @@ def google_login(ws_connection):
         )
     ws_connection.send(mesg_type="system", command="update_google_docs_token", mesg=st.session_state._credentials.to_json())
 
-    
 def receive(ws_connection):
     """Receives a message payload from the websocket connection
     and displays it in the Streamlit UI.
@@ -63,6 +75,10 @@ def receive(ws_connection):
     with st.chat_message("assistant"):
         st.markdown(payload)
         st.session_state.messages.append({"role": "assistant", "content": payload})
+        audio_stream = elevenlabs_get_stream(text=payload)
+        audio_bytes = b"".join([bytes(a) for a in audio_stream])
+        st.markdown(f'<audio autoplay src="data:audio/mp3;base64,{base64.b64encode(audio_bytes).decode()}" type="audio/mp3"></audio>', unsafe_allow_html=True)
+        # st.audio(audio_bytes), sample_rate=44100, format="audio/mp3")
 
 def prompt(ws_connection):
     # Prompts user for input, displays input in chat UI,
