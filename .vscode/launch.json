@@ -28,7 +28,8 @@
                 "run",
                 "${file}"
             ],
-            "justMyCode": false
+            "justMyCode": false,
+            "envFile": "${workspaceFolder}/.env"
         }
     ]
 }
