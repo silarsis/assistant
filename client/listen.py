@@ -1,4 +1,3 @@
-import os
 import threading
 import time
 import queue
@@ -7,9 +6,6 @@ import numpy as np
 import torch
 import speech_recognition as sr
 import whisper
-
-if os.environ.get('DEEPGRAM_API_KEY'):
-    from deepgram import Deepgram
 
 load_dotenv()
 
