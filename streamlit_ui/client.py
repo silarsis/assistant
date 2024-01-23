@@ -6,15 +6,17 @@ import time
 from websockets.sync.client import connect, ClientConnection
 
 import streamlit as st
-from streamlit.connections import ExperimentalBaseConnection
+from streamlit.connections import BaseConnection
 
 import google_auth_oauthlib
 
 import elevenlabs
 
-class WSConnection(ExperimentalBaseConnection[ClientConnection]):
+from listen import Listen
+
+class WSConnection(BaseConnection[ClientConnection]):
     # WSConnection handles the websocket connection to the assistant server.
-    # It subclasses ExperimentalBaseConnection to integrate with Streamlit.
+    # It subclasses BaseConnection to integrate with Streamlit.
 
     # _connect establishes the websocket connection.
 
@@ -47,6 +49,33 @@ class WSConnection(ExperimentalBaseConnection[ClientConnection]):
         if st.session_state.hear_thoughts:
             json_message["hear_thoughts"] = True
         self._instance.send(json.dumps(json_message))
+        
+class ListenConnection(BaseConnection[Listen]):
+    def _connect(self, **kwargs) -> Listen:
+        listener = Listen(self.receive_text_from_speech)
+        if 'listen' in st.session_state and st.session_state.listen:
+            listener.start_listening()
+        return listener
+    
+    def start_listening(self):
+        self._instance.start_listening()
+        
+    def stop_listening(self):
+        self._instance.stop_listening()
+        
+    def toggle_listening(self):
+        if st.session_state.listen:
+            self.stop_listening()
+            st.session_state.listen = False
+        else:
+            self.start_listening()
+            st.session_state.listen = True
+            
+    def receive_text_from_speech(self, mesg: str = ''):
+        st.session_state.chat_input.update(mesg)
+            
+    def quit(self):
+        self._instance.quit()
 
 def elevenlabs_get_stream(text: str = '') -> bytes:
     elevenlabs.set_api_key(os.environ.get('ELEVENLABS_API_KEY'))
@@ -69,7 +98,7 @@ def google_login(ws_connection):
         )
     ws_connection.send(mesg_type="system", command="update_google_docs_token", mesg=st.session_state._credentials.to_json())
 
-def receive(ws_connection):
+def receive(ws_connection, listener):
     """Receives a message payload from the websocket connection
     and displays it in the Streamlit UI.
 
@@ -84,11 +113,13 @@ def receive(ws_connection):
         st.markdown(payload)
         st.session_state.messages.append({"role": "assistant", "content": payload})
         if st.session_state.speak:
+            listener.stop_listening()
             audio_stream = elevenlabs_get_stream(text=payload)
             audio_bytes = b"".join([bytes(a) for a in audio_stream])
             st.markdown(f'<audio autoplay src="data:audio/mp3;base64,{base64.b64encode(audio_bytes).decode()}" type="audio/mp3"></audio>', unsafe_allow_html=True)
+            listener.start_listening()
 
-def prompt(ws_connection):
+def prompt(ws_connection, listener):
     # Prompts user for input, displays input in chat UI,
     # sends input to websocket connection, waits for and displays
     # response from websocket connection
@@ -101,8 +132,8 @@ def prompt(ws_connection):
         # Send the prompt
         ws_connection.send(mesg=prompt)
         # Wait for a response
-        receive(ws_connection)
-
+        receive(ws_connection, listener)
+    
 def main():
     """Main function to run the Streamlit chatbot UI.
 
@@ -111,13 +142,14 @@ def main():
     Calls prompt() to get user input and display assistant responses in the chat UI.
     """
     st.title("Echo AI Assistant")
+    listener = ListenConnection("speech")
     with st.sidebar.expander("Connection Parameters"):
         st.text_input("LLM API URI", key="uri", value="ws://localhost:10000")
         st.text_input("session_id", key="session_id", value="client")
     with st.sidebar.expander("Interface Options"):
         st.checkbox("Hear Thoughts", key="hear_thoughts")
         st.checkbox("Speak", key="speak", value=True)
-        st.checkbox("Listen (not working yet)", key="listen", value=False)
+        st.checkbox("Listen (not working yet)", key="listen", value=False, on_change=listener.toggle_listening)
 
     # Connect to our backend agent
     ws_connection = WSConnection("agent")
@@ -130,7 +162,7 @@ def main():
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    prompt(ws_connection)
+    prompt(ws_connection, listener)
 
 
 if __name__ == '__main__':
