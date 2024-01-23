@@ -7,6 +7,8 @@ import torch
 import speech_recognition as sr
 import whisper
 
+from typing import Callable
+
 load_dotenv()
 
 PHRASE_TIMEOUT = 2
@@ -14,7 +16,7 @@ PHRASE_TIMEOUT = 2
 # Listener setup stolen from https://github.com/davabase/whisper_real_time/blob/master/transcribe_demo.py
 
 class Listen:
-    def __init__(self, callback):
+    def __init__(self, callback: Callable[[str], None]):
         self.callback = callback
         self._ending = False
         self.listening = False
@@ -55,7 +57,7 @@ class Listen:
         recorder = sr.Recognizer()
         recorder.energy_threshold = 1000
         recorder.dynamic_energy_threshold = False
-        record_timeout = 2
+        record_timeout = 5
         source = sr.Microphone(sample_rate=16000)
         # with sr.Microphone(sample_rate=16000) as source:
         with source: # Done this way because it needs to be in a contact to be adjusted
@@ -95,7 +97,9 @@ class Listen:
                 transcription.append(text)
                 last_heard = time.time()
             if transcription and (time.time() - last_heard > PHRASE_TIMEOUT):
-                self.callback(' '.join(transcription).strip())
+                output = ' '.join(transcription).strip()
+                if output:
+                    self.callback(output)
                 transcription = []
         print("Stopping listening")
         if self.bg_stop_fn:
