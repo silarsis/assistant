@@ -8,7 +8,9 @@ from models.tools.memory import Memory
 
 # New semantic kernel setup
 import semantic_kernel as sk
-from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
+from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion, OpenAIChatCompletion
+from semantic_kernel.connectors.ai.open_ai.services.azure_chat_completion import AsyncAzureOpenAI
+from semantic_kernel.connectors.ai.open_ai.services.open_ai_chat_completion import AsyncOpenAI
 from semantic_kernel.planning.stepwise_planner import StepwisePlanner
 
 # from models.plugins.ScrapeText import ScrapeTextPlugin
@@ -25,25 +27,20 @@ DEFAULT_SESSION_ID = 'static'
 
 def getKernel(model: Optional[str] = "") -> sk.Kernel:
     kernel = sk.Kernel()
-    deployment = os.environ.get('OPENAI_DEPLOYMENT_NAME', "")
+    deployment_name = os.environ.get('OPENAI_DEPLOYMENT_NAME', "")
     api_key = os.environ.get('OPENAI_API_KEY', "")
     endpoint = os.environ.get('OPENAI_API_BASE', "")
     org_id = os.environ.get('OPENAI_ORG_ID', None)
     model = model or os.environ.get('OPENAI_DEPLOYMENT_NAME', "gpt-4")
+    # from semantic_kernel.connectors.ai.open_ai.services.open_ai_chat_completion import AsyncOpenAI
     if os.environ.get('OPENAI_API_TYPE') == 'azure':
         print("Azure")
-        kernel.add_chat_service("dv", AzureChatCompletion(deployment, endpoint, api_key=api_key))
+        client = AsyncAzureOpenAI(api_key=api_key, organization=org_id, base_url=endpoint)
+        kernel.add_chat_service("echo", AzureChatCompletion(deployment_name, async_client=client))
     else:
         print("OpenAI")
-        if endpoint:
-            # Need to use a different connector here to connect to the custom endpoint
-            from semantic_kernel.connectors.ai.open_ai.services.open_ai_chat_completion import AsyncOpenAI, OpenAIChatCompletion
-            # create the openai connection
-            client = AsyncOpenAI(api_key=api_key, organization=org_id, base_url=endpoint)
-            kernel.add_chat_service("chat-gpt", OpenAIChatCompletion(model, async_client=client))
-        else:
-            from semantic_kernel.connectors.ai.open_ai import OpenAIChatCompletion
-            kernel.add_chat_service("chat-gpt", OpenAIChatCompletion(model, api_key, org_id))
+        client = AsyncOpenAI(api_key=api_key, organization=org_id, base_url=endpoint)
+        kernel.add_chat_service("echo", OpenAIChatCompletion(model, async_client=client))
     return kernel
 
 
@@ -102,7 +99,7 @@ class Guide:
         # TODO: Is there a way to force calling a particular plugin at the end of all other plugins in the planner?
         # If so, we could force rephrasing that way.
         # The rephrase question here sometimes generates an odd sort of response, should think about phrasing that better.
-        return await self.direct_responder.response(history_context, history, f'You were asked "{query}" and you worked out the answer to be "{answer}". Please respond to the user with this information directly.', session_id=session_id)
+        return await self.direct_responder.response(history_context, history, f'You were asked "{query}" and you worked out the answer to be "{answer}". Please use this answer to respond to the user.', session_id=session_id)
     
     async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], session_id: str=DEFAULT_SESSION_ID, **kwargs) -> None:
         # Convert the prompt to character + history
