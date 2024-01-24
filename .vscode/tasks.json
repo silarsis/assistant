@@ -46,6 +46,17 @@
                 "panel": "dedicated",
                 "showReuseMessage": false
             }
+        },
+        {
+            "label": "Refresh",
+            "type": "shell",
+            "command": "echo",
+            "dependsOrder": "sequence",
+            "dependsOn": ["Build", "Up", "Logs"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
         }
     ]
 }
