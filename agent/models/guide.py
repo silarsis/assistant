@@ -11,10 +11,10 @@ import semantic_kernel as sk
 from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
 from semantic_kernel.planning.stepwise_planner import StepwisePlanner
 
-# from models.plugins.ScrapeText import ScrapeTextSkill
+# from models.plugins.ScrapeText import ScrapeTextPlugin
 from models.plugins.WolframAlpha import WolframAlphaPlugin
 from models.plugins.GoogleDocs import GoogleDocLoaderPlugin
-from semantic_kernel.core_skills import FileIOSkill, MathSkill, TextSkill, TimeSkill
+from semantic_kernel.core_plugins import FileIOPlugin, MathPlugin, TextPlugin, TimePlugin
 
 from typing import List, Optional, Callable
 import os
@@ -59,15 +59,15 @@ class Guide:
         
     def _setup_planner(self):
         print("Setting up the planner and plugins")
-        # self.guide.import_skill(ScrapeTextSkill, "ScrapeText")
+        # self.guide.import_plugin(ScrapeTextPlugin, "ScrapeText")
         self._google_docs = GoogleDocLoaderPlugin(kernel=self.guide)
-        self.guide.import_skill(self._google_docs, "gdoc")
+        self.guide.import_plugin(self._google_docs, "gdoc")
         if os.environ.get('WOLFRAM_ALPHA_APPID'):
-            self.guide.import_skill(WolframAlphaPlugin(wolfram_alpha_appid=os.environ.get('WOLFRAM_ALPHA_APPID')), "wolfram")
-        self.guide.import_skill(MathSkill(), "math")
-        self.guide.import_skill(FileIOSkill(), "fileIO")
-        self.guide.import_skill(TimeSkill(), "time")
-        self.guide.import_skill(TextSkill(), "text")
+            self.guide.import_plugin(WolframAlphaPlugin(wolfram_alpha_appid=os.environ.get('WOLFRAM_ALPHA_APPID')), "wolfram")
+        self.guide.import_plugin(MathPlugin(), "math")
+        self.guide.import_plugin(FileIOPlugin(), "fileIO")
+        self.guide.import_plugin(TimePlugin(), "time")
+        self.guide.import_plugin(TextPlugin(), "text")
         self.planner = StepwisePlanner(self.guide)
         print("Planner created")
         
@@ -99,7 +99,7 @@ class Guide:
     
     async def rephrase(self, query: str, answer: str, history: str, history_context: str, session_id: str = DEFAULT_SESSION_ID) -> str:
         # Rephrase the text to match the character
-        # TODO: Is there a way to force calling a particular skill at the end of all other skills in the planner?
+        # TODO: Is there a way to force calling a particular plugin at the end of all other plugins in the planner?
         # If so, we could force rephrasing that way.
         # The rephrase question here sometimes generates an odd sort of response, should think about phrasing that better.
         return await self.direct_responder.response(history_context, history, f'You were asked "{query}" and you worked out the answer to be "{answer}". Please respond to the user with this information directly.', session_id=session_id)

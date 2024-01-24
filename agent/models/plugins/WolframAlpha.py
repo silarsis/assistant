@@ -2,7 +2,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
-from semantic_kernel.skill_definition import sk_function
+from semantic_kernel.plugin_definition import sk_function
 from semantic_kernel.orchestration.sk_context import SKContext
 
 import wolframalpha
