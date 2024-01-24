@@ -37,7 +37,11 @@ class WSConnection(BaseConnection[ClientConnection]):
 
     def recv(self):
         print("receiving")
-        message = self._instance.recv()
+        try:
+            message = self._instance.recv()
+        except Exception as e: # Should be catching connection closed error specifically
+            st.error(f"Connection closed: {e}")
+            return ""
         try:
             payload = json.loads(message)["payload"]
         except json.decoder.JSONDecodeError:
@@ -53,13 +57,15 @@ class WSConnection(BaseConnection[ClientConnection]):
         
 class AudioConnection(BaseConnection[Listen]):
     def _connect(self, **kwargs) -> Listen:
-        if 'listen_queue' not in st.session_state:
+        if 'listener' not in st.session_state:
             self.listen_queue = st.session_state.listen_queue = queue.Queue()
+            listener = Listen(self._recv_from_bg_queue)
+            if 'listen' in st.session_state and st.session_state.listen:
+                listener.start_listening()
         else:
             self.listen_queue = st.session_state.listen_queue
-        listener = Listen(self._recv_from_bg_queue)
-        if 'listen' in st.session_state and st.session_state.listen:
-            listener.start_listening()
+            listener = st.session_state.listener
+        st.info("Audio (voice and ears) active")
         return listener
     
     def _recv_from_bg_queue(self, mesg: str):
