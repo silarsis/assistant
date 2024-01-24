@@ -30,8 +30,8 @@ class WSConnection(BaseConnection[ClientConnection]):
                 con = connect(st.session_state.uri)
                 st.info("Connected to assistant at " + st.session_state.uri)
                 break
-            except ConnectionError:
-                st.error("Connection error. Retrying...")
+            except ConnectionError as e:
+                st.error(f"Connection error: {e}\nRetrying...")
                 time.sleep(2)
         return con
 
@@ -40,7 +40,7 @@ class WSConnection(BaseConnection[ClientConnection]):
         try:
             message = self._instance.recv()
         except Exception as e: # Should be catching connection closed error specifically
-            st.error(f"Connection closed: {e}")
+            st.error(f"Connection closed: {e}") # Should delete the connection here, I think
             return ""
         try:
             payload = json.loads(message)["payload"]
