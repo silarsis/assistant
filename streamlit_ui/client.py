@@ -24,6 +24,7 @@ class WSConnection(BaseConnection[ClientConnection]):
     # recv receives a message from the websocket and returns the payload.
 
     # send sends a formatted message to the websocket.
+    @st.cache_resource
     def _connect(self, **kwargs) -> ClientConnection:
         while True:
             try:
@@ -52,6 +53,7 @@ class WSConnection(BaseConnection[ClientConnection]):
         self._instance.send(json.dumps(json_message))
         
 class AudioConnection(BaseConnection[Listen]):
+    @st.cache_resource
     def _connect(self, **kwargs) -> Listen:
         if 'listen_queue' not in st.session_state:
             self.listen_queue = st.session_state.listen_queue = queue.Queue()
@@ -112,12 +114,13 @@ def google_login():
     st.session_state.ws_connection.send(mesg_type="system", command="update_google_docs_token", mesg=st.session_state._credentials.to_json())
 
 def receive():
-    payload = st.session_state.ws_connection.recv()
-    with st.chat_message("assistant"):
-        st.markdown(payload)
-        st.session_state.messages.append({"role": "assistant", "content": payload})
-        if st.session_state.speak:
-            st.session_state.listener.speak(payload)
+    while True:
+        payload = st.session_state.ws_connection.recv()
+        with st.chat_message("assistant"):
+            st.markdown(payload)
+            st.session_state.messages.append({"role": "assistant", "content": payload})
+            if st.session_state.speak:
+                st.session_state.listener.speak(payload)
 
 def process_user_input(prompt: str = ""):
     # Add user message to chat history
@@ -127,8 +130,6 @@ def process_user_input(prompt: str = ""):
         st.markdown(prompt)
     # Send the prompt
     st.session_state.ws_connection.send(mesg=prompt)
-    # Wait for a response
-    receive()
     
 def prompt():
     # Prompts user for input, displays input in chat UI,
@@ -176,6 +177,7 @@ def main():
             st.markdown(message["content"])
 
     prompt()
+    receive()
 
 
 if __name__ == '__main__':
