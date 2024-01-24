@@ -24,5 +24,6 @@ COPY app.py .
 COPY prompt_parser.py .
 COPY character.txt .
 COPY models/ ./models/
+COPY .vscode/launch.json .vscode/launch.json
 
 CMD [ "python", "app.py" ]
