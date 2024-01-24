@@ -33,6 +33,19 @@
                 "kind": "build",
                 "isDefault": true
             }
+        },
+        {
+            "label": "Logs",
+            "type": "shell",
+            "command": "docker-compose logs -f",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "panel": "dedicated",
+                "showReuseMessage": false
+            }
         }
     ]
 }
