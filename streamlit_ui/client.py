@@ -24,7 +24,6 @@ class WSConnection(BaseConnection[ClientConnection]):
     # recv receives a message from the websocket and returns the payload.
 
     # send sends a formatted message to the websocket.
-    @st.cache_resource
     def _connect(self, **kwargs) -> ClientConnection:
         while True:
             try:
@@ -53,7 +52,6 @@ class WSConnection(BaseConnection[ClientConnection]):
         self._instance.send(json.dumps(json_message))
         
 class AudioConnection(BaseConnection[Listen]):
-    @st.cache_resource
     def _connect(self, **kwargs) -> Listen:
         if 'listen_queue' not in st.session_state:
             self.listen_queue = st.session_state.listen_queue = queue.Queue()
