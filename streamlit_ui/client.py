@@ -172,7 +172,7 @@ def main():
     with st.sidebar.expander("Interface Options"):
         st.checkbox("Hear Thoughts", key="hear_thoughts")
         st.checkbox("Speak", key="speak", value=True)
-        st.checkbox("Listen (not working yet)", key="listen", value=False, on_change=st.session_state.listener.toggle_listening)
+        st.checkbox("Listen", key="listen", value=False, on_change=st.session_state.listener.toggle_listening)
     
     # Next bits are from https://docs.streamlit.io/knowledge-base/tutorials/build-conversational-apps#build-a-simple-chatbot-gui-with-streaming
     # Store and display messages so far

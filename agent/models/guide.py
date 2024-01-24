@@ -83,12 +83,14 @@ class Guide:
         print(f"Tools: {[tool.name for tool in tools]}")
         return tools
     
-    async def _plan(self, goal: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID) -> str:
+    async def _plan(self, goal: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool=False) -> str:
         try:
             plan = self.planner.create_plan(goal=goal)
             context = self.guide.create_new_context()
             context.variables.set('session_id', session_id)
             response = await plan.invoke_async(context=context)
+            if hear_thoughts:
+                callback(f"This should have the planner's thought process")
         except Exception as e:
             print(f"Planning failed: {e}")
             response = ""
@@ -101,12 +103,14 @@ class Guide:
         # The rephrase question here sometimes generates an odd sort of response, should think about phrasing that better.
         return await self.direct_responder.response(history_context, history, f'You were asked "{query}" and you worked out the answer to be "{answer}". Please use this answer to respond to the user.', session_id=session_id)
     
-    async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], session_id: str=DEFAULT_SESSION_ID, **kwargs) -> None:
+    async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], session_id: str=DEFAULT_SESSION_ID, hear_thoughts: bool=False, **kwargs) -> None:
         # Convert the prompt to character + history
         history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
         self.memory.add_message(role="Human", content=f'Human: {prompt}', session_id=session_id)
-        response = await self._plan(prompt, callback=callback)
+        response = await self._plan(prompt, callback=callback, hear_thoughts=hear_thoughts)
+        if hear_thoughts:
+            callback(f"Rephrasing the answer from plugins: {response}")
         response = await self.rephrase(prompt, str(response), history, history_context, session_id=session_id)
         if not response:
             # If planning fails, try a chat
