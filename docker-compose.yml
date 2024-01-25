@@ -55,6 +55,11 @@ services:
       - REDIS_URL=redis://redis:6379
       - MOTORHEAD_LONG_TERM_MEMORY=True
       - OPENAI_API_KEY
+      - OPENAI_API_BASE
+      - AZURE_API_KEY
+      - AZURE_API_BASE
+      - AZURE_DEPLOYMENT_ID
+      - AZURE_DEPLOYMENT_ID_ADA
     depends_on:
       - "redis"
     restart: always
