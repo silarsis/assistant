@@ -1,4 +1,9 @@
 ## Tools
+import base64
+from typing import List, Optional, Callable
+import os
+import json
+
 from langchain.agents import Tool
 from langchain_community.utilities import GoogleSearchAPIWrapper
 # from models.tools import apify
@@ -18,9 +23,6 @@ from models.plugins.WolframAlpha import WolframAlphaPlugin
 from models.plugins.GoogleDocs import GoogleDocLoaderPlugin
 from semantic_kernel.core_plugins import FileIOPlugin, MathPlugin, TextPlugin, TimePlugin
 
-from typing import List, Optional, Callable
-import os
-import json
 
 
 DEFAULT_SESSION_ID = 'static'
@@ -118,6 +120,11 @@ class Guide:
         response = str(response)
         self.memory.add_message(role="AI", content=f"Response: {response}\n", session_id=session_id)
         return callback(response)
+
+    async def upload_file_with_callback(self, file_data: str, callback: Callable[[str], None], session_id: str=DEFAULT_SESSION_ID, hear_thoughts: bool=False, **kwargs) -> None:
+        file = base64.b64decode(file_data)
+        document_store.upload(file)
+        callback("Document Uploaded")
 
     async def update_prompt_template(self, prompt: str, callback: Callable[[str], None], **kwargs) -> str:
         self.direct_responder._prompt_templates.set(kwargs.get('session_id', DEFAULT_SESSION_ID), prompt)

@@ -36,11 +36,15 @@ class WSConnection(BaseConnection[ClientConnection]):
         return con
 
     def recv(self):
+        if not self._instance:
+            print("Reconnecting...")
+            self._connect()
         print("receiving")
         try:
             message = self._instance.recv()
         except Exception as e: # Should be catching connection closed error specifically
-            st.error(f"Connection closed: {e}") # Should delete the connection here, I think
+            st.error(f"Connection closed: {e}")
+            del(self._instance)
             return ""
         try:
             payload = json.loads(message)["payload"]
@@ -87,9 +91,13 @@ class AudioConnection(BaseConnection[Listen]):
     def speak(self, payload: str = ''):
         if st.session_state.listen:
             self.stop_listening()
-        audio_stream = elevenlabs_get_stream(text=payload)
-        audio_bytes = b"".join([bytes(a) for a in audio_stream])
-        st.markdown(f'<audio autoplay src="data:audio/mp3;base64,{base64.b64encode(audio_bytes).decode()}" type="audio/mp3"></audio>', unsafe_allow_html=True)
+        if os.environ.get('ELEVENLABS_API_KEY'):
+            audio_stream = elevenlabs_get_stream(text=payload)
+            audio_bytes = b"".join([bytes(a) for a in audio_stream])
+            st.markdown(f'<audio autoplay src="data:audio/mp3;base64,{base64.b64encode(audio_bytes).decode()}" type="audio/mp3"></audio>', unsafe_allow_html=True)
+        else:
+            # TTS here
+            pass
         if st.session_state.listen:
             self.start_listening()
             
@@ -117,7 +125,7 @@ def google_login():
         )
     st.session_state.ws_connection.send(mesg_type="system", command="update_google_docs_token", mesg=st.session_state._credentials.to_json())
 
-def receive():
+def receive_from_upstream():
     while True:
         payload = st.session_state.ws_connection.recv()
         with st.chat_message("assistant"):
@@ -126,7 +134,7 @@ def receive():
             if st.session_state.speak:
                 st.session_state.listener.speak(payload)
 
-def process_user_input(prompt: str = ""):
+def process_user_input(prompt):
     # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
     # Display user message in chat message container
@@ -135,18 +143,19 @@ def process_user_input(prompt: str = ""):
     # Send the prompt
     st.session_state.ws_connection.send(mesg=prompt)
     
-def prompt():
-    # Prompts user for input, displays input in chat UI,
-    # sends input to websocket connection, waits for and displays
-    # response from websocket connection
+def process_file_upload():
+    file = st.session_state.file_uploader
+    print("Got an uploaded file")
+    # Upload the file to the upstream agent
+    
+    
+def check_for_audio():
     if 'listen_queue' in st.session_state:
         try:
             mesg = st.session_state.listen_queue.get_nowait()
             process_user_input(mesg)
         except queue.Empty:
             pass
-    if prompt := st.chat_input("Input here"):
-        process_user_input(prompt)
     
 def main():
     """Main function to run the Streamlit chatbot UI.
@@ -167,12 +176,14 @@ def main():
     # Connect to our backend agent
     st.session_state.ws_connection = WSConnection("agent")
     # Create the speech and hearing centre
-    st.session_state.listener = AudioConnection("speech")
+    st.session_state.listener = AudioConnection("speech") # Why does this take so long?
     
     with st.sidebar.expander("Interface Options"):
         st.checkbox("Hear Thoughts", key="hear_thoughts")
         st.checkbox("Speak", key="speak", value=True)
         st.checkbox("Listen", key="listen", value=False, on_change=st.session_state.listener.toggle_listening)
+        
+    st.sidebar.button("Login to Google", key="google_login_button", on_click=google_login)
     
     # Next bits are from https://docs.streamlit.io/knowledge-base/tutorials/build-conversational-apps#build-a-simple-chatbot-gui-with-streaming
     # Store and display messages so far
@@ -180,8 +191,11 @@ def main():
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    prompt()
-    receive()
+    st.sidebar.file_uploader("Upload Files", key="file_uploader", accept_multiple_files=True, on_change=process_file_upload)
+    if prompt := st.chat_input("Input here", key="chat_input"):
+        process_user_input(prompt)
+    check_for_audio()
+    receive_from_upstream()
 
 
 if __name__ == '__main__':

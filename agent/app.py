@@ -76,14 +76,16 @@ class API:
                         cmd = self.bot.update_character
                     if (m.get('command') == 'update_google_docs_token'):
                         cmd = self.bot.update_google_docs_token
+                elif m.get("type") == "file":
+                    cmd = self.bot.upload_file_with_callback
                 if cmd:
                     correlation_id=f'{uuid.uuid4()}'
-                    def callback(x):
+                    def callback(mesg):
                         return self.ws_loop.run_until_complete(
                             self.ws_send_coroutine(
                                 websocket, 
                                 m['prompt'], 
-                                x, 
+                                mesg, 
                                 'response', 
                                 correlation_id))
                     await cmd(
