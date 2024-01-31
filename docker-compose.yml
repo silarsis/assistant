@@ -4,24 +4,24 @@ version: '3.5'
 
 services:
   # The main assistant
-  agent:
-    build: ./agent
-    container_name: agent
-    ports:
-      - "10000:10000" # The http port
-      - "8000:8000" # The text port
-    environment:
-      - MEMORY
-      - OPENAI_API_KEY
-      - OPENAI_API_TYPE
-      - OPENAI_API_BASE
-      - OPENAI_API_VERSION
-      - OPENAI_DEPLOYMENT_NAME
-      - OPENAI_MODEL
-      - GOOGLE_API_KEY
-      - GOOGLE_CSE_ID
-      - WOLFRAM_ALPHA_APPID
-      - APIFY_API_TOKEN
+  # agent:
+  #   build: ./agent
+  #   container_name: agent
+  #   ports:
+  #     - "10000:10000" # The http port
+  #     - "8000:8000" # The text port
+  #   environment:
+  #     - MEMORY
+  #     - OPENAI_API_KEY
+  #     - OPENAI_API_TYPE
+  #     - OPENAI_API_BASE
+  #     - OPENAI_API_VERSION
+  #     - OPENAI_DEPLOYMENT_NAME
+  #     - OPENAI_MODEL
+  #     - GOOGLE_API_KEY
+  #     - GOOGLE_CSE_ID
+  #     - WOLFRAM_ALPHA_APPID
+  #     - APIFY_API_TOKEN
 
   # A document store for memory for the assistant
   chroma:
@@ -45,35 +45,31 @@ services:
       - "5002:5002"
 
   # Motorhead for memory for the chat and responses
-  motorhead:
-    container_name: motorhead
-    image: ghcr.io/getmetal/motorhead:latest
-    ports:
-      - "8001:8001"
-    environment:
-      - PORT=8001
-      - REDIS_URL=redis://redis:6379
-      - MOTORHEAD_LONG_TERM_MEMORY=True
-      - OPENAI_API_KEY
-      - OPENAI_API_BASE
-      # - AZURE_API_KEY
-      # - AZURE_API_BASE
-      # - AZURE_DEPLOYMENT_ID
-      # - AZURE_DEPLOYMENT_ID_ADA
-    depends_on:
-      - "redis"
-    restart: always
+  # motorhead:
+  #   container_name: motorhead
+  #   image: ghcr.io/getmetal/motorhead:latest
+  #   ports:
+  #     - "8001:8001"
+  #   environment:
+  #     - PORT=8001
+  #     - REDIS_URL=redis://redis:6379
+  #     - MOTORHEAD_LONG_TERM_MEMORY=True
+  #     - OPENAI_API_KEY=${MOTORHEAD_API_KEY}
+  #     - OPENAI_API_BASE=${MOTORHEAD_API_BASE}
+  #   depends_on:
+  #     - "redis"
+  #   restart: always
 
   # Backing store for motorhead
-  redis:
-    container_name: redis
-    image: redis/redis-stack:latest
-    restart: always
-    ports:
-      - '6379:6379'
-    volumes: 
-      - redis:/data
+#   redis:
+#     container_name: redis
+#     image: redis/redis-stack:latest
+#     restart: always
+#     ports:
+#       - '6379:6379'
+#     volumes: 
+#       - redis:/data
 
-volumes:
-  redis:
-    driver: local
+# volumes:
+#   redis:
+#     driver: local
