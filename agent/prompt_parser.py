@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, Any
 from models.guide import Guide
 import os
 
@@ -18,5 +18,5 @@ class Parser:
         print(f"Prompting with {prompt}", flush=True)
         return await self.agent.prompt_with_callback(prompt, callback=callback, **kwargs)
     
-    def update_google_docs_token(self, token: str, callback: Callable[[str], None], **kwargs) -> str:
-        self.agent.update_google_docs_token(token, callback=callback, **kwargs)
+    def update_google_docs_token(self, token: Any) -> str:
+        return self.agent.update_google_docs_token(token)
