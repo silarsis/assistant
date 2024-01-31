@@ -93,9 +93,11 @@ class Guide:
             context.variables.set("session_id", session_id)
             response = await plan.invoke_async(context=context)
             if hear_thoughts:
-                callback(f"This should have the planner's thought process")
+                callback("This should have the planner's thought process")
         except Exception as e:
             print(f"Planning failed: {e}")
+            if hear_thoughts:
+                callback(str(e))
             response = ""
         return str(response)
 
@@ -122,7 +124,7 @@ class Guide:
             response = await self.direct_responder.response(history_context, history, prompt, session_id=session_id)
         response = str(response)
         self.memory.add_message(role="AI", content=f"Response: {response}\n", session_id=session_id)
-        return callback(response)
+        return response
 
     async def upload_file_with_callback(self, file_data: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> None:
         file = base64.b64decode(file_data)

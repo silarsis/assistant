@@ -4,6 +4,9 @@ import os
 
 import semantic_kernel as sk
 
+MOTORHEAD_HOST=os.environ.get('MOTORHEAD_HOST', 'motorhead')
+MOTORHEAD_PORT=os.environ.get('MOTORHEAD_PORT', '8001')
+
 class LocalMemory:
     context: Optional[str] = None
     template: str = """
@@ -58,7 +61,7 @@ Summary:
         return self.context.setdefault(session_id, "")
     
 class MotorheadMemory:
-    url: str = "http://motorhead:8001"
+    url: str = f"http://{MOTORHEAD_HOST}:{MOTORHEAD_PORT}"
     timeout = 3000
     memory_key = "history"
     context: Optional[str] = None
@@ -107,7 +110,7 @@ class MotorheadMemory:
         self.refresh_from(session_id)
         return self.context[session_id]
     
-if os.environ.get('MEMORY') == 'local':
-    Memory = LocalMemory
-else:
+if os.environ.get('MEMORY') == 'motorhead':
     Memory = MotorheadMemory
+else:
+    Memory = LocalMemory

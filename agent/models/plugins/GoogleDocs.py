@@ -8,7 +8,6 @@ from semantic_kernel.orchestration.sk_context import SKContext
 from googleapiclient.discovery import build
 # import to provide google.auth.credentials.Credentials
 from google.oauth2.credentials import Credentials
-from langchain.chains.summarize import load_summarize_chain
 from langchain.docstore.document import Document
 
 import chromadb
@@ -17,9 +16,10 @@ from chromadb.utils import embedding_functions
 
 import re
 import time
+import os
 
-CHROMADB_HOST = 'chroma'
-CHROMADB_PORT = '8000'
+CHROMADB_HOST = os.environ.get('CHROMA_HOST', 'chroma')
+CHROMADB_PORT = os.environ.get('CHROMA_PORT', '8000')
 
 
 class GoogleDocLoaderPlugin(BaseModel):
