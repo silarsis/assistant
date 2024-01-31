@@ -124,7 +124,16 @@ def google_login():
             "438635256773-rf4rmv51lo436a576enb74t7pc9n8rre.apps.googleusercontent.com",
             "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",
         )
-    st.success("Authorized for Google")
+        result = st.session_state.agent.bot.update_google_docs_token(st.session_state._credentials)
+        with st.chat_message("assistant"):
+            st.markdown(result)
+            
+def google_logout():
+    if "_credentials" in st.session_state:
+        st.session_state._credentials = None
+        result = st.session_state.agent.bot.update_google_docs_token(st.session_state._credentials)
+        with st.chat_message("assistant"):
+            st.markdown(result)
 
 async def process_user_input(prompt):
     # Add user message to chat history
@@ -197,8 +206,11 @@ def main():
         st.checkbox("Hear Thoughts", key="hear_thoughts")
         st.checkbox("Speak", key="speak", value=True)
         st.checkbox("Listen", key="listen", value=False, on_change=st.session_state.listener.toggle_listening)
-        
-    st.sidebar.button("Login to Google", key="google_login_button", on_click=google_login)
+    
+    if "_credentials" in st.session_state:
+        st.sidebar.button("Logout from Google", key="google_login_button", on_click=google_logout)
+    else:
+        st.sidebar.button("Login to Google", key="google_login_button", on_click=google_login)
     
     # Next bits are from https://docs.streamlit.io/knowledge-base/tutorials/build-conversational-apps#build-a-simple-chatbot-gui-with-streaming
     # Store and display messages so far

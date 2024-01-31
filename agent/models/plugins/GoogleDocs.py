@@ -1,9 +1,9 @@
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from pydantic import BaseModel
 
-from semantic_kernel.plugin_definition import sk_function, sk_function_context_parameter
-from semantic_kernel.orchestration.sk_context import SKContext
+from semantic_kernel.plugin_definition import kernel_function, kernel_function_context_parameter
+from semantic_kernel.orchestration.kernel_context import KernelContext
 
 from googleapiclient.discovery import build
 # import to provide google.auth.credentials.Credentials
@@ -24,7 +24,7 @@ CHROMADB_PORT = os.environ.get('CHROMA_PORT', '8000')
 
 class GoogleDocLoaderPlugin(BaseModel):
     kernel: Any = None
-    _tokens: dict = {}
+    _credentials: Credentials = None
     _vector_stores: dict = {}
     
     def __init__(self, **kwargs):
@@ -48,8 +48,8 @@ class GoogleDocLoaderPlugin(BaseModel):
             else:
                 break
 
-    def set_token(self, token: dict, session_id: str = 'static') -> str: # TODO: This isn't token, this is credentials object
-        self._tokens[session_id] = Credentials.from_authorized_user_info(token)
+    def set_credentials(self, creds: Optional[Credentials] = None) -> str:
+        self._credentials = creds
     
     def read_structural_elements(self, elements: list) -> list:
         text = []
@@ -107,29 +107,24 @@ class GoogleDocLoaderPlugin(BaseModel):
         summary = self._summarize_prompt(context=context)
         return str(summary)
 
-    @sk_function(
+    @kernel_function(
         description="Load a Google Doc into the vector store",
         name="load_doc",
         input_description="The Google Doc ID"
     )
-    @sk_function_context_parameter(
-        name="session_id",
-        description="Session ID",
-        default_value="static"
+    @kernel_function_context_parameter(
+        name="docid",
+        description="The document ID in Google"
     )
-    def load_doc(self, docid: str, context: SKContext, interim: Callable=None) -> str:
+    def load_doc(self, docid: str, context: KernelContext, interim: Callable=None) -> str:
         print(f"Debug: {docid}")
-        session_id = context.variables.get('session_id')
-        # Hard code for now while I work this out
-        session_id = 'client'
-        creds = self._tokens.get(session_id, None)
-        print(f"creds: {creds}; session_id: {session_id}")
-        if not creds:
-            return "No token found"
+        print(f"Debug: {self._credentials}")
+        if not self._credentials:
+            return "Unauthorized, please login"
         if docid.startswith('http'):
             # Strip the url
             docid = re.search(r'document/d/([^/]+)/', docid).group(1)
-        elements = self._fetch_from_gdocs(docid, creds)
+        elements = self._fetch_from_gdocs(docid, self._credentials)
         # Store in the vectordb
         self._vector_store(docid).add(documents=elements, ids=[f'{docid}_{i}' for i in range(len(elements))])
         # Need to store in a separate db for the cleartext, with the same chunking of elements
