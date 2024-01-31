@@ -25,8 +25,8 @@ class CustomHTTPTransport(httpx.HTTPTransport):
         ]:
             request.url = request.url.copy_with(path="/openai/images/generations:submit")
             response = super().handle_request(request)
-            if 'operation-location' not in response.headers:
-                import pdb ; pdb.set_trace()
+            if response.status_code not in (200, 202):
+                raise httpx.HTTPError(response=response)
             operation_location_url = response.headers["operation-location"]
             request.url = httpx.URL(operation_location_url)
             request.method = "GET"
@@ -97,4 +97,4 @@ class ImageGenerationPlugin(BaseModel):
             prompt=description, 
             size="1024x1024",
             n=1)
-        return result.data[0].url
+        return f'<img src="{result.data[0].url}" alt="{description}" style="max-width: 50%; max-height: 50%;">'
