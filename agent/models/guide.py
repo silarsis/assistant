@@ -1,8 +1,7 @@
 ## Tools
 import base64
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Any
 import os
-import json
 
 from langchain.agents import Tool
 from langchain_community.utilities import GoogleSearchAPIWrapper
@@ -22,8 +21,8 @@ from semantic_kernel.planning.stepwise_planner import StepwisePlanner
 # from models.plugins.ScrapeText import ScrapeTextPlugin
 from models.plugins.WolframAlpha import WolframAlphaPlugin
 from models.plugins.GoogleDocs import GoogleDocLoaderPlugin
+from models.plugins.ImageGeneration import ImageGenerationPlugin
 from semantic_kernel.core_plugins import FileIOPlugin, MathPlugin, TextPlugin, TimePlugin
-
 
 DEFAULT_SESSION_ID = "static"
 
@@ -68,6 +67,7 @@ class Guide:
         self.guide.import_plugin(FileIOPlugin(), "fileIO")
         self.guide.import_plugin(TimePlugin(), "time")
         self.guide.import_plugin(TextPlugin(), "text")
+        self.guide.import_plugin(ImageGenerationPlugin(), "image generation")
         self.planner = StepwisePlanner(self.guide)
         print("Planner created")
 
@@ -101,13 +101,13 @@ class Guide:
             response = ""
         return str(response)
 
-    async def rephrase(self, query: str, answer: str, history: str, history_context: str, session_id: str = DEFAULT_SESSION_ID) -> str:
+    async def rephrase(self, input: str, answer: str, history: str, history_context: str, session_id: str = DEFAULT_SESSION_ID) -> str:
         # Rephrase the text to match the character
         # TODO: Is there a way to force calling a particular plugin at the end of all other plugins in the planner?
         # If so, we could force rephrasing that way.
         # The rephrase question here sometimes generates an odd sort of response, should think about phrasing that better.
         return await self.direct_responder.response(
-            history_context, history, f'You were asked "{query}" and you worked out the answer to be "{answer}". Please use this answer to respond to the user.', session_id=session_id
+            history_context, history, f'You were asked "{input}" and you worked out the answer to be "{answer}". Please use this answer to respond to the user.', session_id=session_id
         )
 
     async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> None:
@@ -135,9 +135,12 @@ class Guide:
         self.direct_responder._prompt_templates.set(kwargs.get("session_id", DEFAULT_SESSION_ID), prompt)
         callback("Done")
 
-    async def update_google_docs_token(self, token: str, callback: Callable[[str], None], session_id: str = "", **kwargs) -> str:
-        self._google_docs.set_token(json.loads(token), session_id=session_id)
-        callback("Authenticated")
+    def update_google_docs_token(self, token: Any) -> str:
+        self._google_docs.set_credentials(token)
+        if token:
+            return "Logged in"
+        else:
+            return "Logged out"
 
 
 class DirectResponse:
@@ -156,7 +159,7 @@ Context:
 Chat History:
 {{$history}}
 
-Human: {{$query}}
+Human: {{$input}}
 Answer: """
 
     def __init__(self, kernel: sk.Kernel, character: str = ""):
@@ -164,11 +167,11 @@ Answer: """
         self.character = character
         self._prompt_templates = PromptTemplate(self.character, self.prompt)
 
-    async def response(self, context: str, history: str, query: str, session_id: Optional[str] = DEFAULT_SESSION_ID, **kwargs) -> str:
+    async def response(self, context: str, history: str, input: str, session_id: Optional[str] = DEFAULT_SESSION_ID, **kwargs) -> str:
         prompt = self._prompt_templates.get(session_id, self.kernel)
         ctx = self.kernel.create_new_context()
         ctx.variables["context"] = context
         ctx.variables["history"] = history
-        ctx.variables["query"] = query
+        ctx.variables["input"] = input
         response = await prompt.invoke_async(context=ctx)
         return str(response).strip()
