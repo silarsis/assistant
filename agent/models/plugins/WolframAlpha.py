@@ -2,8 +2,8 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
-from semantic_kernel.plugin_definition import sk_function
-from semantic_kernel.orchestration.sk_context import SKContext
+from semantic_kernel.plugin_definition import kernel_function
+from semantic_kernel.orchestration.kernel_context import KernelContext
 
 import wolframalpha
 
@@ -11,12 +11,12 @@ class WolframAlphaPlugin(BaseModel):
     wolfram_client: Optional[Any] = None
     wolfram_alpha_appid: Optional[str] = None
         
-    @sk_function(
+    @kernel_function(
         description="Query Wolfram Alpha for factual or general knowledge questions, math, current events, news headlines, or expert-level answers on topics ranging from science, culture, and history to sports, geography, weather, and more.",
         name="wolfram",
         input_description="The question you want to ask"
     )
-    def wolfram(self, query: str, context: SKContext) -> str:
+    def wolfram(self, query: str, context: KernelContext) -> str:
         if not self.wolfram_client:
             self.wolfram_client = wolframalpha.Client(self.wolfram_alpha_appid)
         res = self.wolfram_client.query(query)
