@@ -3,7 +3,6 @@ import base64
 import queue
 import asyncio
 import requests
-import time
 
 from urllib.parse import quote
 
@@ -17,7 +16,7 @@ import wave
 import elevenlabs
 
 from listen import Listen
-from prompt_parser import Parser
+from models.guide import Guide, Message
 
 
 TTS_HOST=os.environ.get("TTS_HOST", "localhost")
@@ -73,22 +72,31 @@ class AudioConnection(BaseConnection[Listen]):
     def quit(self):
         self._instance.quit()
         
-class AgentConnector(BaseConnection[Parser]):
-    def _connect(self, **kwargs) -> Parser:
-        self.bot = Parser()
+class AgentConnector(BaseConnection[Guide]):
+    def _connect(self, **kwargs) -> Guide:
+        if 'character' in kwargs:
+            self._character = kwargs['character']
+        else:
+            if os.path.exists('./character.txt'):
+                filename = './character.txt'
+            elif os.path.exists('./agent/character.txt'):
+                filename = './agent/character.txt'
+            with open(filename, 'r') as char_file:
+                self._character = char_file.read()
+        self.bot = Guide(default_character=self._character)
         return self.bot
     
     async def send(self, prompt, **kwargs):
         # Called in the main thread, puts sent messages on the queue for the background thread to consume
-        response = await self.bot.prompt_with_callback(prompt, callback=self.recv_from_bot)
+        response = await self.bot.prompt_with_callback(prompt, callback=self.recv_from_bot, hear_thoughts=st.session_state.hear_thoughts)
         self.recv_from_bot(response)
         
-    def recv_from_bot(self, response):
+    def recv_from_bot(self, response: Message):
         with st.chat_message("assistant"):
-            st.markdown(response)
-            st.session_state.messages.append({"role": "assistant", "content": response})
+            st.markdown(response.mesg)
+            st.session_state.messages.append({"role": "assistant", "content": response.mesg})
             if st.session_state.speak:
-                st.session_state.listener.speak(response)
+                st.session_state.listener.speak(response.mesg)
         
 def tts_get_stream(text: str) -> bytes:
     q_text = quote(text)
@@ -124,16 +132,16 @@ def google_login():
             "438635256773-rf4rmv51lo436a576enb74t7pc9n8rre.apps.googleusercontent.com",
             "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",
         )
-        result = st.session_state.agent.bot.update_google_docs_token(st.session_state._credentials)
+        response = st.session_state.agent.bot.update_google_docs_token(st.session_state._credentials)
         with st.chat_message("assistant"):
-            st.markdown(result)
+            st.markdown(response.mesg)
             
 def google_logout():
     if "_credentials" in st.session_state:
         st.session_state._credentials = None
-        result = st.session_state.agent.bot.update_google_docs_token(st.session_state._credentials)
+        response = st.session_state.agent.bot.update_google_docs_token(st.session_state._credentials)
         with st.chat_message("assistant"):
-            st.markdown(result)
+            st.markdown(response.mesg)
 
 async def process_user_input(prompt):
     # Add user message to chat history
@@ -177,17 +185,14 @@ def main():
         st.session_state.messages = []
         
     # Connect to our backend agent
-    if True: # "agent" not in st.session_state:
-        status.write("Creating agent...")
-        try:
-            st.session_state.agent = AgentConnector("agent")
-        except Exception as e:
-            status.write(str(e))
-            status.update(label="Failed creating agent", state="error", expanded=True)
-            st.stop()
-        status.write("Done creating agent")
-    else:
-        status.write("Using existing agent")
+    status.write("Creating agent...")
+    try:
+        st.session_state.agent = AgentConnector("agent")
+    except Exception as e:
+        status.write(str(e))
+        status.update(label="Failed creating agent", state="error", expanded=True)
+        st.stop()
+    status.write("Done creating agent")
         
     # Create the speech and hearing centre
     if "listener" not in st.session_state:

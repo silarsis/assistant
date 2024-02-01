@@ -1,7 +1,9 @@
 ## Tools
 import base64
-from typing import List, Optional, Callable, Any
+from typing import List, Optional, Callable, Any, Literal
 import os
+
+from pydantic import BaseModel
 
 from langchain.agents import Tool
 from langchain_community.utilities import GoogleSearchAPIWrapper
@@ -26,6 +28,24 @@ from semantic_kernel.core_plugins import FileIOPlugin, MathPlugin, TextPlugin, T
 
 DEFAULT_SESSION_ID = "static"
 
+
+class Message(BaseModel):
+    mesg: str = ""
+    type: Literal["request", "response", "thought", "error"] = "request"
+    
+    def __str__(self):
+        return self.model_dump_json()
+    
+    def __init__(self, *args, **kwargs):
+        if args:
+            kwargs['mesg'] = args[0] # Allow for init without specifying 'mesg='
+        super().__init__(**kwargs)
+    
+class Response(Message):
+    type: str = "response"
+    
+class Thought(Message):
+    type: str = "thought"
 
 def getKernel(model: Optional[str] = "") -> sk.Kernel:
     kernel = sk.Kernel()
@@ -86,44 +106,49 @@ class Guide:
         print(f"Tools: {[tool.name for tool in tools]}")
         return tools
 
-    async def _plan(self, goal: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False) -> str:
+    async def _plan(self, goal: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False) -> Message:
         try:
             plan = self.planner.create_plan(goal=goal)
             context = self.guide.create_new_context()
             context.variables.set("session_id", session_id)
-            response = await plan.invoke_async(context=context)
+            result = await plan.invoke_async(context=context)
             if hear_thoughts:
-                callback("This should have the planner's thought process")
+                print("Thinking")
+                callback(Thought(mesg="This should have the planner's thought process"))
         except Exception as e:
             print(f"Planning failed: {e}")
             if hear_thoughts:
-                callback(str(e))
-            response = ""
-        return str(response)
+                callback(Thought(mesg=str(e)))
+            result = ""
+        return Response(mesg=str(result))
 
-    async def rephrase(self, input: str, answer: str, history: str, history_context: str, session_id: str = DEFAULT_SESSION_ID) -> str:
+    async def rephrase(self, input: str, answer: Message, history: str, history_context: str, session_id: str = DEFAULT_SESSION_ID) -> Message:
         # Rephrase the text to match the character
         # TODO: Is there a way to force calling a particular plugin at the end of all other plugins in the planner?
         # If so, we could force rephrasing that way.
         # The rephrase question here sometimes generates an odd sort of response, should think about phrasing that better.
+        # Direct responder is wrong, need to call without it's processing
         return await self.direct_responder.response(
-            history_context, history, f'You were asked "{input}" and you worked out the answer to be "{answer}". Please use this answer to respond to the user.', session_id=session_id
+            history_context, 
+            history, 
+            f'You were asked "{input}" and you worked out the answer to be "{answer.mesg}". Please use this answer to respond to the user.', 
+            session_id=session_id
         )
 
-    async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> None:
+    async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> Message:
         # Convert the prompt to character + history
         history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
         self.memory.add_message(role="Human", content=f"Human: {prompt}", session_id=session_id)
         response = await self._plan(prompt, callback=callback, hear_thoughts=hear_thoughts)
-        if hear_thoughts:
-            callback(f"Rephrasing the answer from plugins: {response}")
-        response = await self.rephrase(prompt, str(response), history, history_context, session_id=session_id)
-        if not response:
+        if response:
+            if hear_thoughts:
+                callback(Thought(mesg=f"Rephrasing the answer from plugins: {response}"))
+            response = await self.rephrase(prompt, response, history, history_context, session_id=session_id)
+        else:
             # If planning fails, try a chat
             response = await self.direct_responder.response(history_context, history, prompt, session_id=session_id)
-        response = str(response)
-        self.memory.add_message(role="AI", content=f"Response: {response}\n", session_id=session_id)
+        self.memory.add_message(role="AI", content=f"Response: {response.mesg}\n", session_id=session_id)
         return response
 
     async def upload_file_with_callback(self, file_data: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> None:
@@ -135,12 +160,12 @@ class Guide:
         self.direct_responder._prompt_templates.set(kwargs.get("session_id", DEFAULT_SESSION_ID), prompt)
         callback("Done")
 
-    def update_google_docs_token(self, token: Any) -> str:
+    def update_google_docs_token(self, token: Any) -> Response:
         self._google_docs.set_credentials(token)
         if token:
-            return "Logged in"
+            return Response(mesg="Logged in")
         else:
-            return "Logged out"
+            return Response(mesg="Logged out")
 
 
 class DirectResponse:
@@ -167,11 +192,11 @@ Answer: """
         self.character = character
         self._prompt_templates = PromptTemplate(self.character, self.prompt)
 
-    async def response(self, context: str, history: str, input: str, session_id: Optional[str] = DEFAULT_SESSION_ID, **kwargs) -> str:
+    async def response(self, context: str, history: str, input: str, session_id: Optional[str] = DEFAULT_SESSION_ID, **kwargs) -> Response:
         prompt = self._prompt_templates.get(session_id, self.kernel)
         ctx = self.kernel.create_new_context()
         ctx.variables["context"] = context
         ctx.variables["history"] = history
         ctx.variables["input"] = input
-        response = await prompt.invoke_async(context=ctx)
-        return str(response).strip()
+        result = await prompt.invoke_async(context=ctx)
+        return Response(mesg=str(result).strip())
