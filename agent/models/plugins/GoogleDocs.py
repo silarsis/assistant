@@ -117,8 +117,8 @@ class GoogleDocLoaderPlugin(BaseModel):
         description="The document ID in Google"
     )
     def load_doc(self, docid: str, context: KernelContext, interim: Callable=None) -> str:
-        print(f"Debug: {docid}")
-        print(f"Debug: {self._credentials}")
+        print(f"Debug Docid: {docid}")
+        print(f"Debug Creds: {self._credentials}")
         if not self._credentials:
             return "Unauthorized, please login"
         if docid.startswith('http'):
