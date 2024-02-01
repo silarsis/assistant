@@ -24,6 +24,7 @@ from semantic_kernel.planning.stepwise_planner import StepwisePlanner
 from models.plugins.WolframAlpha import WolframAlphaPlugin
 from models.plugins.GoogleDocs import GoogleDocLoaderPlugin
 from models.plugins.ImageGeneration import ImageGenerationPlugin
+from models.plugins.ScrapeText import ScrapeTextPlugin
 from semantic_kernel.core_plugins import FileIOPlugin, MathPlugin, TextPlugin, TimePlugin
 
 DEFAULT_SESSION_ID = "static"
@@ -88,6 +89,7 @@ class Guide:
         self.guide.import_plugin(TimePlugin(), "time")
         self.guide.import_plugin(TextPlugin(), "text")
         self.guide.import_plugin(ImageGenerationPlugin(), "image generation")
+        self.guide.import_plugin(ScrapeTextPlugin(), "scrape_text")
         self.planner = StepwisePlanner(self.guide)
         print("Planner created")
 
@@ -95,7 +97,6 @@ class Guide:
         # Define which tools the agent can use to answer user queries
         print("Setting up tools")
         tools = []
-        tools.append(Tool(name="Request", func=web_requests.scrape_text, description="use to make a request to a website, provide the url as action input"))
         # if os.environ.get('APIFY_API_TOKEN'):
         #     self.apify = apify.ApifyTool()
         #     tools.append(Tool(name='Scrape', func=self.apify.scrape_website, description="use when you need to scrape a website, provide the url as action input"))
