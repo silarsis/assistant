@@ -84,6 +84,8 @@ class AgentConnector(BaseConnection[Guide]):
             with open(filename, 'r') as char_file:
                 self._character = char_file.read()
         self.bot = Guide(default_character=self._character)
+        if '_credentials' in st.session_state:
+            self.bot.update_google_docs_token(st.session_state._credentials)
         return self.bot
     
     async def send(self, prompt, **kwargs):
