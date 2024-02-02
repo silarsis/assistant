@@ -10,7 +10,6 @@ from langchain_community.utilities import GoogleSearchAPIWrapper
 
 # from models.tools import apify
 from models.tools.prompt_template import PromptTemplate
-from models.tools import web_requests
 from models.tools.memory import Memory
 
 # New semantic kernel setup
@@ -23,9 +22,10 @@ from semantic_kernel.planning.stepwise_planner import StepwisePlanner
 # from models.plugins.ScrapeText import ScrapeTextPlugin
 from models.plugins.WolframAlpha import WolframAlphaPlugin
 from models.plugins.GoogleDocs import GoogleDocLoaderPlugin
+from models.plugins.GoogleSearch import GoogleSearchPlugin
 from models.plugins.ImageGeneration import ImageGenerationPlugin
 from models.plugins.ScrapeText import ScrapeTextPlugin
-from semantic_kernel.core_plugins import FileIOPlugin, MathPlugin, TextPlugin, TimePlugin
+from semantic_kernel.core_plugins import FileIOPlugin, MathPlugin, TextPlugin, TimePlugin, TextMemoryPlugin
 
 DEFAULT_SESSION_ID = "static"
 
@@ -88,8 +88,10 @@ class Guide:
         self.guide.import_plugin(FileIOPlugin(), "fileIO")
         self.guide.import_plugin(TimePlugin(), "time")
         self.guide.import_plugin(TextPlugin(), "text")
+        self.guide.import_plugin(TextMemoryPlugin(), "text_memory")
         self.guide.import_plugin(ImageGenerationPlugin(), "image generation")
         self.guide.import_plugin(ScrapeTextPlugin(), "scrape_text")
+        self.guide.import_plugin(GoogleSearchPlugin(), "google_search")
         self.planner = StepwisePlanner(self.guide)
         print("Planner created")
 
@@ -110,12 +112,12 @@ class Guide:
     async def _plan(self, goal: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False) -> Message:
         try:
             plan = self.planner.create_plan(goal=goal)
+            if hear_thoughts:
+                pass
+                #callback(Thought(mesg=f"Planning result"))
             context = self.guide.create_new_context()
             context.variables.set("session_id", session_id)
             result = await plan.invoke_async(context=context)
-            if hear_thoughts:
-                print("Thinking")
-                callback(Thought(mesg="This should have the planner's thought process"))
         except Exception as e:
             print(f"Planning failed: {e}")
             if hear_thoughts:
