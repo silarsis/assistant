@@ -16,7 +16,7 @@ class WolframAlphaPlugin(BaseModel):
         name="wolfram",
         input_description="The question you want to ask"
     )
-    def wolfram(self, query: str, context: KernelContext) -> str:
+    def wolfram(self, query: str) -> str:
         if not self.wolfram_client:
             self.wolfram_client = wolframalpha.Client(self.wolfram_alpha_appid)
         res = self.wolfram_client.query(query)
