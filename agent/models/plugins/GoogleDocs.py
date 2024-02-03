@@ -18,9 +18,6 @@ import re
 import time
 import os
 
-CHROMADB_HOST = os.environ.get('CHROMA_HOST', 'chroma')
-CHROMADB_PORT = os.environ.get('CHROMA_PORT', '8000')
-
 
 class GoogleDocLoaderPlugin(BaseModel):
     kernel: Any = None
@@ -30,14 +27,18 @@ class GoogleDocLoaderPlugin(BaseModel):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._embeddings = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+        # I think I really want to cache the results of these summarise calls
         self._summarize_prompt = self.kernel.create_semantic_function(
-            prompt_template="Please write a short summary of the following: {{$content}}", 
+            prompt_template="Write a short summary of the following. Do not add any details that are not already there, and if you cannot summarise simply say 'no summary': {{$content}}", 
             max_tokens=2000, temperature=0.2, top_p=0.5)
+        self._connect_to_chromadb()
+        
+    def _connect_to_chromadb(self):
         while True:
             try:
                 self._chroma_client = chromadb.HttpClient(
-                    host=CHROMADB_HOST, 
-                    port=CHROMADB_PORT, 
+                    host=os.environ.get('CHROMA_HOST', 'chroma'), 
+                    port=os.environ.get('CHROMA_PORT', '8000'), 
                     settings=Settings(anonymized_telemetry=False))
             except ValueError as e:
                 if 'Could not connect' in str(e):
@@ -96,16 +97,27 @@ class GoogleDocLoaderPlugin(BaseModel):
         elements = self.read_structural_elements(document.get('body').get('content'))
         return elements
     
-    def _summarize_elements(self, elements: list) -> str:
+    def _summarize_elements(self, elements: list, interim: Callable = None) -> str:
         docs = [Document(page_content=t) for t in elements]
         context = self.kernel.create_new_context()
         summaries = []
+        
+        def _summarize(block: str) -> str:
+            context.variables.set('content', block)
+            summary = self._summarize_prompt(context=context).result
+            if interim:
+                interim(summary)
+            return summary
+            
+        block = ''
         for doc in docs:
-            context.variables.set('content', doc.page_content)
-            summaries.append(self._summarize_prompt(context=context))
-        context.variables.set('content', "\n".join(summaries))
-        summary = self._summarize_prompt(context=context)
-        return str(summary)
+            block += doc.page_content
+            if len(block) > 1000:
+                summaries.append(_summarize(block.strip()))
+                block = ''
+        if block.strip():
+            summaries.append(_summarize(block.strip()))
+        return _summarize("\n".join(summaries))
 
     @kernel_function(
         description="Load a Google Doc into the vector store",
@@ -117,8 +129,6 @@ class GoogleDocLoaderPlugin(BaseModel):
         description="The document ID in Google"
     )
     def load_doc(self, docid: str, context: KernelContext, interim: Callable=None) -> str:
-        print(f"Debug Docid: {docid}")
-        print(f"Debug Creds: {self._credentials}")
         if not self._credentials:
             return "Unauthorized, please login"
         if docid.startswith('http'):
@@ -130,7 +140,7 @@ class GoogleDocLoaderPlugin(BaseModel):
         # Need to store in a separate db for the cleartext, with the same chunking of elements
         # Then, we can use the same ids to retrieve the cleartext for things like summarization
         # Now summarize the doc
-        return f"Document loaded successfully. Document Summary: {self._summarize_elements(elements)}"
+        return f"Document loaded successfully. Document Summary: {self._summarize_elements(elements, interim=interim)}"
     
 # Thought: Instead of databasing the raw text of the doc, why don't we use gdocs as the database,
 # and re-fetch it anytime we need it? Potential for mis-match between vectordb and content for any
