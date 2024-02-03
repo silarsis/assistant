@@ -3,26 +3,6 @@ version: '3.5'
 # Note, don't use port 8080 because google oauth uses that
 
 services:
-  # The main assistant
-  # agent:
-  #   build: ./agent
-  #   container_name: agent
-  #   ports:
-  #     - "10000:10000" # The http port
-  #     - "8000:8000" # The text port
-  #   environment:
-  #     - MEMORY
-  #     - OPENAI_API_KEY
-  #     - OPENAI_API_TYPE
-  #     - OPENAI_API_BASE
-  #     - OPENAI_API_VERSION
-  #     - OPENAI_DEPLOYMENT_NAME
-  #     - OPENAI_MODEL
-  #     - GOOGLE_API_KEY
-  #     - GOOGLE_CSE_ID
-  #     - WOLFRAM_ALPHA_APPID
-  #     - APIFY_API_TOKEN
-
   # A document store for memory for the assistant
   chroma:
     image: ghcr.io/chroma-core/chroma:latest
