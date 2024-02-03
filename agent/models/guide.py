@@ -2,6 +2,7 @@
 import base64
 from typing import List, Optional, Callable, Any, Literal
 import os
+from dotenv import load_dotenv
 
 from pydantic import BaseModel
 
@@ -49,13 +50,13 @@ class Thought(Message):
     type: str = "thought"
 
 def getKernel(model: Optional[str] = "") -> sk.Kernel:
+    load_dotenv()
     kernel = sk.Kernel()
     deployment_name = os.environ.get("OPENAI_DEPLOYMENT_NAME", "")
     api_key = os.environ.get("OPENAI_API_KEY", "")
     endpoint = os.environ.get("OPENAI_API_BASE", "")
     org_id = os.environ.get("OPENAI_ORG_ID", None)
     model = model or os.environ.get("OPENAI_DEPLOYMENT_NAME", "gpt-4")
-    # from semantic_kernel.connectors.ai.open_ai.services.open_ai_chat_completion import AsyncOpenAI
     if os.environ.get("OPENAI_API_TYPE") == "azure":
         print("Azure")
         client = AsyncAzureOpenAI(api_key=api_key, organization=org_id, base_url=endpoint)
@@ -129,14 +130,14 @@ class Guide:
         # Rephrase the text to match the character
         # TODO: Is there a way to force calling a particular plugin at the end of all other plugins in the planner?
         # If so, we could force rephrasing that way.
-        # The rephrase question here sometimes generates an odd sort of response, should think about phrasing that better.
-        # Direct responder is wrong, need to call without it's processing
-        return await self.direct_responder.response(
-            history_context, 
-            history, 
-            f'You were asked "{input}" and you worked out the answer to be "{answer.mesg}". Please use this answer to respond to the user.', 
-            session_id=session_id
-        )
+        prompt = PromptTemplate(
+            self.default_character, 
+            f'You were asked "{input}" and you worked out the answer to be "{answer.mesg}". Please respond to the user.'
+        ).get(session_id, self.guide)
+        ctx = self.guide.create_new_context()
+        ctx.variables['input'] = answer.mesg
+        result = await prompt.invoke_async(context=ctx)
+        return Response(mesg=str(result).strip())
 
     async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> Message:
         # Convert the prompt to character + history
