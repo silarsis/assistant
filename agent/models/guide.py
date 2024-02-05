@@ -52,7 +52,7 @@ class Thought(Message):
     type: str = "thought"
 
 def getKernel(model: Optional[str] = "") -> sk.Kernel:
-    # load_dotenv()
+    load_dotenv(dotenv_path=".env")
     kernel = sk.Kernel()
     deployment_name = os.environ.get("OPENAI_DEPLOYMENT_NAME", "")
     api_key = os.environ.get("OPENAI_API_KEY", "")
