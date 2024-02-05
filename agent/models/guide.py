@@ -34,6 +34,7 @@ DEFAULT_SESSION_ID = "static"
 class Message(BaseModel):
     mesg: str = ""
     type: Literal["request", "response", "thought", "error"] = "request"
+    final: bool = False
     
     def __str__(self):
         return self.model_dump_json()
@@ -45,12 +46,13 @@ class Message(BaseModel):
     
 class Response(Message):
     type: str = "response"
+    final: bool = True
     
 class Thought(Message):
     type: str = "thought"
 
 def getKernel(model: Optional[str] = "") -> sk.Kernel:
-    load_dotenv()
+    # load_dotenv()
     kernel = sk.Kernel()
     deployment_name = os.environ.get("OPENAI_DEPLOYMENT_NAME", "")
     api_key = os.environ.get("OPENAI_API_KEY", "")
@@ -90,7 +92,7 @@ class Guide:
         self.guide.import_plugin(TimePlugin(), "time")
         self.guide.import_plugin(TextPlugin(), "text")
         self.guide.import_plugin(TextMemoryPlugin(), "text_memory")
-        self.guide.import_plugin(ImageGenerationPlugin(), "image generation")
+        self.guide.import_plugin(ImageGenerationPlugin(), "image_generation")
         self.guide.import_plugin(ScrapeTextPlugin(), "scrape_text")
         self.guide.import_plugin(GoogleSearchPlugin(), "google_search")
         self.planner = StepwisePlanner(self.guide)
@@ -118,13 +120,13 @@ class Guide:
                 #callback(Thought(mesg=f"Planning result"))
             context = self.guide.create_new_context()
             context.variables.set("session_id", session_id)
-            result = await plan.invoke_async(context=context)
+            result = await plan.invoke(context=context)
         except Exception as e:
             print(f"Planning failed: {e}")
             if hear_thoughts:
-                callback(Thought(mesg=str(e)))
+                await callback(Thought(mesg=str(e)))
             result = ""
-        return Response(mesg=str(result))
+        return Thought(mesg=str(result))
 
     async def rephrase(self, input: str, answer: Message, history: str, history_context: str, session_id: str = DEFAULT_SESSION_ID) -> Message:
         # Rephrase the text to match the character
@@ -136,10 +138,13 @@ class Guide:
         ).get(session_id, self.guide)
         ctx = self.guide.create_new_context()
         ctx.variables['input'] = answer.mesg
-        result = await prompt.invoke_async(context=ctx)
-        return Response(mesg=str(result).strip())
+        result = await prompt.invoke(context=ctx)
+        return Thought(mesg=str(result).strip())
 
     async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> Message:
+        if not prompt:
+            await callback(Response(mesg="I'm afraid I don't have enough context to respond. Could you please rephrase your question?", final=True))
+            return
         # Convert the prompt to character + history
         history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
@@ -147,22 +152,23 @@ class Guide:
         response = await self._plan(prompt, callback=callback, hear_thoughts=hear_thoughts)
         if response:
             if hear_thoughts:
-                callback(Thought(mesg=f"Rephrasing the answer from plugins: {response}"))
+                await callback(Thought(mesg=f"Rephrasing the answer from plugins: {response.mesg}"))
             response = await self.rephrase(prompt, response, history, history_context, session_id=session_id)
         else:
             # If planning fails, try a chat
             response = await self.direct_responder.response(history_context, history, prompt, session_id=session_id)
         self.memory.add_message(role="AI", content=f"Response: {response.mesg}\n", session_id=session_id)
-        return response
+        final_response = Response(mesg=response.mesg)
+        await callback(final_response)
 
     async def upload_file_with_callback(self, file_data: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> None:
         file = base64.b64decode(file_data)
         document_store.upload(file)
-        callback("Document Uploaded")
+        await callback(Response("Document Uploaded"))
 
     async def update_prompt_template(self, prompt: str, callback: Callable[[str], None], **kwargs) -> str:
         self.direct_responder._prompt_templates.set(kwargs.get("session_id", DEFAULT_SESSION_ID), prompt)
-        callback("Done")
+        await callback("Done")
 
     def update_google_docs_token(self, token: Any) -> Response:
         self._google_docs.set_credentials(token)
@@ -196,11 +202,11 @@ Answer: """
         self.character = character
         self._prompt_templates = PromptTemplate(self.character, self.prompt)
 
-    async def response(self, context: str, history: str, input: str, session_id: Optional[str] = DEFAULT_SESSION_ID, **kwargs) -> Response:
+    async def response(self, context: str, history: str, input: str, session_id: Optional[str] = DEFAULT_SESSION_ID, **kwargs) -> Message:
         prompt = self._prompt_templates.get(session_id, self.kernel)
         ctx = self.kernel.create_new_context()
         ctx.variables["context"] = context
         ctx.variables["history"] = history
         ctx.variables["input"] = input
-        result = await prompt.invoke_async(context=ctx)
-        return Response(mesg=str(result).strip())
+        result = await prompt.invoke(context=ctx)
+        return Thought(mesg=str(result).strip())
