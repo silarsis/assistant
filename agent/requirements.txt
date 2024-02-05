@@ -18,7 +18,7 @@ google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
 fastapi
-chromadb-client
+chromadb
 semantic-kernel
 opentelemetry-api
 opentelemetry-sdk

@@ -23,6 +23,7 @@ class GoogleDocLoaderPlugin(BaseModel):
     kernel: Any = None
     _credentials: Credentials = None
     _vector_stores: dict = {}
+    _chroma_client: chromadb.Client = None
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -31,9 +32,12 @@ class GoogleDocLoaderPlugin(BaseModel):
         self._summarize_prompt = self.kernel.create_semantic_function(
             prompt_template="Write a short summary of the following. Do not add any details that are not already there, and if you cannot summarise simply say 'no summary': {{$content}}", 
             max_tokens=2000, temperature=0.2, top_p=0.5)
-        self._connect_to_chromadb()
+        self._connect_to_local_chromadb()
         
-    def _connect_to_chromadb(self):
+    def _connect_to_local_chromadb(self):
+        self._chroma_client = chromadb.PersistentClient(path='./volumes/chroma/local', settings=Settings(anonymized_telemetry=False))
+    
+    def _connect_to_remote_chromadb(self):
         while True:
             try:
                 self._chroma_client = chromadb.HttpClient(

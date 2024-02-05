@@ -4,16 +4,16 @@ version: '3.5'
 
 services:
   # A document store for memory for the assistant
-  chroma:
-    image: ghcr.io/chroma-core/chroma:latest
-    container_name: chroma
-    volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/chroma/index_data:/index_data
-    environment:
-      ANONYMIZED_TELEMETRY: False
-      IS_PERSISTENT: True
-    ports:
-      - 6000:8000
+  # chroma:
+  #   image: ghcr.io/chroma-core/chroma:latest
+  #   container_name: chroma
+  #   volumes:
+  #     - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/chroma/index_data:/index_data
+  #   environment:
+  #     ANONYMIZED_TELEMETRY: False
+  #     IS_PERSISTENT: True
+  #   ports:
+  #     - 6000:8000
 
   # https://tts.readthedocs.io/en/latest/ - the voice of the assistant
   tts:
