@@ -20,22 +20,18 @@
             ]
         },
         {
-            "name": "Python:Streamlit",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "streamlit",
-            "args": [
-                "run",
-                "${file}"
-            ],
-            "justMyCode": false,
-            "envFile": "${workspaceFolder}/.env"
-        },
-        {
             "name": "Python:Gradio",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/.venv/bin/gradio",
+            "windows": {
+                "program": "${workspaceFolder}/.venv/Scripts/gradio.exe"
+            },
+            "linux": {
+                "program": "${workspaceFolder}/.venv/bin/gradio"
+            },
+            "osx": {
+                "program": "${workspaceFolder}/.venv/bin/gradio"
+            },
             "args": [
                 "agent/client_gradio.py"
             ],
