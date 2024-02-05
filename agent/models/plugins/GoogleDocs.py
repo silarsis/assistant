@@ -37,8 +37,8 @@ class GoogleDocLoaderPlugin(BaseModel):
         while True:
             try:
                 self._chroma_client = chromadb.HttpClient(
-                    host=os.environ.get('CHROMA_HOST', 'chroma'), 
-                    port=os.environ.get('CHROMA_PORT', '8000'), 
+                    host=os.environ.get('CHROMA_HOST', 'localhost'), 
+                    port=os.environ.get('CHROMA_PORT', '6000'), 
                     settings=Settings(anonymized_telemetry=False))
             except ValueError as e:
                 if 'Could not connect' in str(e):
@@ -141,6 +141,7 @@ class GoogleDocLoaderPlugin(BaseModel):
         # Then, we can use the same ids to retrieve the cleartext for things like summarization
         # Now summarize the doc
         return f"Document loaded successfully. Document Summary: {self._summarize_elements(elements, interim=interim)}"
+
     
 # Thought: Instead of databasing the raw text of the doc, why don't we use gdocs as the database,
 # and re-fetch it anytime we need it? Potential for mis-match between vectordb and content for any
