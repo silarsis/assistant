@@ -56,7 +56,7 @@ def getKernel(model: Optional[str] = "") -> sk.Kernel:
     kernel = sk.Kernel()
     deployment_name = os.environ.get("OPENAI_DEPLOYMENT_NAME", "")
     api_key = os.environ.get("OPENAI_API_KEY", "")
-    endpoint = os.environ.get("OPENAI_API_BASE", "")
+    endpoint = os.environ.get("OPENAI_API_BASE", None)
     org_id = os.environ.get("OPENAI_ORG_ID", None)
     model = model or os.environ.get("OPENAI_DEPLOYMENT_NAME", "gpt-4")
     if os.environ.get("OPENAI_API_TYPE") == "azure":
