@@ -68,9 +68,10 @@ class CustomHTTPTransport(httpx.HTTPTransport):
         return super().handle_request(request)
 
 class ImageGenerationPlugin(BaseModel):
-    api_key: str = os.environ.get("IMG_OPENAI_API_KEY", "")
-    base_url: str = os.environ.get("IMG_OPENAI_API_BASE", "")
-    api_version: str = os.environ.get("IMG_OPENAI_API_VERSION", "")
+    api_key: str = os.environ.get("IMG_OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY", ""))
+    base_url: str = os.environ.get("IMG_OPENAI_API_BASE", os.environ.get("OPENAI_API_BASE", None))
+    api_version: str = os.environ.get("IMG_OPENAI_API_VERSION", os.environ.get("OPENAI_API_VERSION", "2023-06-01-preview"))
+    org_id: str = os.environ.get("IMG_OPENAI_ORG_ID", os.environ.get("OPENAI_ORG_ID", None))
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -85,14 +86,21 @@ class ImageGenerationPlugin(BaseModel):
         description="The image description"
     )
     def gen_image(self, description: str = "") -> str:
-        client = openai.AzureOpenAI(
-            api_key=self.api_key, 
-            azure_endpoint=self.base_url, 
-            api_version=self.api_version,
-            http_client=httpx.Client(
-                transport=CustomHTTPTransport(),
+        if os.environ.get("OPENAI_API_TYPE") == "azure":
+            client = openai.AzureOpenAI(
+                api_key=self.api_key, 
+                azure_endpoint=self.base_url, 
+                api_version=self.api_version,
+                http_client=httpx.Client(
+                    transport=CustomHTTPTransport(),
+                )
             )
-        )
+        else:
+            client = openai.OpenAI(
+                api_key=self.api_key, 
+                base_url=self.base_url, 
+                organization=self.org_id
+            )
         result = client.images.generate(
             prompt=description, 
             size="1024x1024",

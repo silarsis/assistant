@@ -4,6 +4,7 @@ import os
 import requests
 import asyncio
 import time
+import re
 
 from urllib.parse import quote
 
@@ -115,8 +116,19 @@ class Agent(BaseModel):
     def set_speech_engine(self, value: str) -> str:
         self.speech_engine = value
         return value
+    
+    def _clean_text_for_speech(self, text: str) -> str:
+        # Clean up the text for speech
+        # First, remove any markdown images
+        md_img = re.compile(r'!\[.*\]\((.*)\)')
+        text = md_img.sub('', text)
+        # Now remove any code blocks
+        code_block = re.compile(r'```.*```')
+        text = code_block.sub('', text)
+        return text
         
     def speak(self, payload: str = ''):
+        payload = self._clean_text_for_speech(payload)
         if self.speech_engine == 'None':
             print("No speech engine")
             return (None, None)
