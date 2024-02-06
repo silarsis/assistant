@@ -126,7 +126,7 @@ class GoogleDocLoaderPlugin(BaseModel):
 
     @kernel_function(
         description="Load a Google Doc into the vector store",
-        name="load_doc",
+        name="load_google_doc",
         input_description="The Google Doc ID"
     )
     @kernel_function_context_parameter(
