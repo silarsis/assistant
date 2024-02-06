@@ -12,6 +12,7 @@ from urllib.parse import quote
 import pyaudio
 import wave
 import elevenlabs
+from openai import OpenAI
 
 from models.guide import Guide, DEFAULT_SESSION_ID
 
@@ -55,7 +56,7 @@ class Agent(BaseModel):
     _character: str = ""
     _agent: Guide = None
     _audio_model: Any = None
-    speaking: bool = False
+    speech_engine: str = os.environ.get('VOICE', 'None')
     
     def __init__(self, **kwargs):
         super().__init__()
@@ -96,13 +97,13 @@ class Agent(BaseModel):
         
     async def process_input(self, input: str, history: list[list[str, str]], *args, **kwargs):
         history.append([input, "Thinking..."])
-        yield(["", history, None])
+        yield(["", history, None, None])
         recvQ = asyncio.Queue()
         asyncio.create_task(self._agent.prompt_with_callback(input, callback=recvQ.put, session_id=DEFAULT_SESSION_ID, hear_thoughts=False))
         history[-1][1] = ''
         while response := await recvQ.get():
             history[-1][1] += response.mesg
-            yield(["", history, self.speak(response.mesg)])
+            yield(["", history] + list(self.speak(response.mesg)))
             if response.final:
                 break
     
@@ -111,26 +112,39 @@ class Agent(BaseModel):
         self._recvQ.put(response)
         # Need to work out how to send this to the chat window
         
-    def set_speaking(self, value: bool) -> bool:
-        self.speaking = value
+    def set_speech_engine(self, value: str) -> str:
+        self.speech_engine = value
         return value
         
     def speak(self, payload: str = ''):
-        if not self.speaking:
-            return None
-        if os.environ.get('ELEVENLABS_API_KEY'):
-            return b"".join([bytes(a) for a in self.elevenlabs_get_stream(text=payload)])
-        else:
+        if self.speech_engine == 'None':
+            print("No speech engine")
+            return (None, None)
+        if self.speech_engine == 'ElevenLabs':
+            print("Elevenlabs TTS")
+            return (None, b"".join([bytes(a) for a in self.elevenlabs_get_stream(text=payload)]))
+        elif self.speech_engine == 'OpenAI':
+            print("OpenAI TTS")
+            client = OpenAI()
+            response = client.audio.speech.create(model='tts-1', voice='nova', input=payload)
+            retval = (None, b''.join(response.iter_bytes()))
+            return retval
+        elif self.speech_engine == 'TTS':
+            print("Local TTS")
             try:
-                return self.tts_get_stream(payload)
+                return (self.tts_get_stream(payload), None)
             except requests.exceptions.ConnectionError as e:
                 print(f"Speech error, not speaking: {e}")
+                return (None, None)
+        else:
+            print(f"Unknown speech engine {self.speech_engine}")
+            return (None, None)
             
     def tts_get_stream(self, text: str) -> bytes:
         q_text = quote(text)
         print("Requesting TTS from Local TTS instance")
         with requests.get(f"http://{TTS_HOST}:{TTS_PORT}/api/tts?text={q_text}&speaker_id=p364&style_wav=&language_id=", stream=True) as wav:
-            p = pyaudio.PyAudio() # Need to remove this and send it back properly
+            p = pyaudio.PyAudio()
             wf = wave.Wave_read(wav.raw)
             stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
                             channels=1,
@@ -154,11 +168,12 @@ class Agent(BaseModel):
 agent = Agent()
 
 with gr.Blocks() as demo:
+    with gr.Accordion("Settings", open=True):
+        speech_engine = gr.Dropdown(["None", "ElevenLabs", "OpenAI", "TTS"], label="Speech Engine", value=os.environ.get('VOICE', 'None'), interactive=True)
+        speech_engine.input(agent.set_speech_engine, [speech_engine], [speech_engine])
     with gr.Row():
-        speaking = gr.Checkbox(value=agent.speaking, label="Speaking")
-        speaking.input(agent.set_speaking, [speaking], [speaking])
-    with gr.Row():
-        speaker = gr.Audio(interactive=False, streaming=True, visible=False)
+        wav_speaker = gr.Audio(interactive=False, streaming=True, visible=False, format='wav', autoplay=True)
+        mp3_speaker = gr.Audio(interactive=False, visible=False, format='mp3', autoplay=True)
     chatbot = gr.Chatbot([], bubble_full_width=False)
     with gr.Row():
         txt = gr.Textbox(
@@ -167,7 +182,7 @@ with gr.Blocks() as demo:
             placeholder="Enter text and press enter",
             container=False,
         )
-        txt.submit(agent.process_input, [txt, chatbot], [txt, chatbot, speaker])
+        txt.submit(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
         # btn = gr.UploadButton("📁", type="binary")
         # btn.upload(agent.process_file_upload, [btn], [chatbot])
     with gr.Row():
@@ -175,7 +190,7 @@ with gr.Blocks() as demo:
         audio = gr.Audio(sources="microphone", streaming=True, autoplay=True)
         audio.stream(agent.process_audio, [audio_state, audio], [audio_state, txt])
         audio.start_recording(lambda x:None, [audio_state], [audio_state]) # This wipes the audio_state at the start of listening
-        audio.stop_recording(agent.process_input, [txt, chatbot], [txt, chatbot, speaker])
+        audio.stop_recording(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
 
 demo.queue()
 if __name__ == '__main__':
