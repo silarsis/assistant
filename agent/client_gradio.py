@@ -8,7 +8,7 @@ import re
 
 from urllib.parse import quote
 
-# import google_auth_oauthlib
+import google_auth_oauthlib
 
 import pyaudio
 import wave
@@ -29,19 +29,7 @@ TTS_HOST=os.environ.get("TTS_HOST", "localhost")
 TTS_PORT=os.environ.get("TTS_PORT", "5002")
         
 
-# def google_login():
-#     # Gets user credentials for Google OAuth and sends them to the websocket
-#     # connection to authorize access to Google Drive and Docs APIs.
-#     if "_credentials" not in st.session_state:
-#         st.session_state._credentials = google_auth_oauthlib.get_user_credentials(
-#             ["https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/documents.readonly"],
-#             # app desktop credentials
-#             "438635256773-rf4rmv51lo436a576enb74t7pc9n8rre.apps.googleusercontent.com",
-#             "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",
-#         )
-#         response = st.session_state.agent.bot.update_google_docs_token(st.session_state._credentials)
-#         with st.chat_message("assistant"):
-#             st.markdown(response.mesg)
+
             
 # def google_logout():
 #     if "_credentials" in st.session_state:
@@ -58,6 +46,7 @@ class Agent(BaseModel):
     _agent: Guide = None
     _audio_model: Any = None
     speech_engine: str = os.environ.get('VOICE', 'None')
+    _google_credentials: Any = None
     
     def __init__(self, **kwargs):
         super().__init__()
@@ -176,6 +165,21 @@ class Agent(BaseModel):
         except elevenlabs.api.error.RateLimitError as err:
             print(str(err), flush=True)
         return audio_stream
+    
+    def google_login(self, btn: str) -> str:
+        # Gets user credentials for Google OAuth and sends them to the websocket
+        # connection to authorize access to Google Drive and Docs APIs.
+        if btn != "Google Login":
+            print("Ignoring further button presses")
+            return btn
+        self._google_credentials = google_auth_oauthlib.get_user_credentials(
+            ["https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/documents.readonly"],
+            # app desktop credentials
+            "438635256773-rf4rmv51lo436a576enb74t7pc9n8rre.apps.googleusercontent.com",
+            "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",
+        )
+        response = self._agent.update_google_docs_token(self._google_credentials)
+        return response.mesg
 
 agent = Agent()
 
@@ -183,6 +187,8 @@ with gr.Blocks() as demo:
     with gr.Accordion("Settings", open=True):
         speech_engine = gr.Dropdown(["None", "ElevenLabs", "OpenAI", "TTS"], label="Speech Engine", value=os.environ.get('VOICE', 'None'), interactive=True)
         speech_engine.input(agent.set_speech_engine, [speech_engine], [speech_engine])
+        google_login_button = gr.Button("Google Login")
+        google_login_button.click(agent.google_login, [google_login_button], [google_login_button])
     with gr.Row():
         wav_speaker = gr.Audio(interactive=False, streaming=True, visible=False, format='wav', autoplay=True)
         mp3_speaker = gr.Audio(interactive=False, visible=False, format='mp3', autoplay=True)

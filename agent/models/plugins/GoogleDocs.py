@@ -101,14 +101,15 @@ class GoogleDocLoaderPlugin(BaseModel):
         elements = self.read_structural_elements(document.get('body').get('content'))
         return elements
     
-    def _summarize_elements(self, elements: list, interim: Callable = None) -> str:
+    async def _summarize_elements(self, elements: list, interim: Callable = None) -> str:
         docs = [Document(page_content=t) for t in elements]
         context = self.kernel.create_new_context()
         summaries = []
         
-        def _summarize(block: str) -> str:
+        async def _summarize(block: str) -> str:
             context.variables.set('content', block)
-            summary = self._summarize_prompt(context=context).result
+            summarized = await self._summarize_prompt(context=context)
+            summary = summarized.result
             if interim:
                 interim(summary)
             return summary
@@ -117,11 +118,11 @@ class GoogleDocLoaderPlugin(BaseModel):
         for doc in docs:
             block += doc.page_content
             if len(block) > 1000:
-                summaries.append(_summarize(block.strip()))
+                summaries.append(await _summarize(block.strip()))
                 block = ''
         if block.strip():
-            summaries.append(_summarize(block.strip()))
-        return _summarize("\n".join(summaries))
+            summaries.append(await _summarize(block.strip()))
+        return await _summarize("\n".join(summaries))
 
     @kernel_function(
         description="Load a Google Doc into the vector store",
@@ -132,7 +133,7 @@ class GoogleDocLoaderPlugin(BaseModel):
         name="docid",
         description="The document ID in Google"
     )
-    def load_doc(self, docid: str, context: KernelContext, interim: Callable=None) -> str:
+    async def load_doc(self, docid: str, context: KernelContext, interim: Callable=None) -> str:
         if not self._credentials:
             return "Unauthorized, please login"
         if docid.startswith('http'):
@@ -144,7 +145,8 @@ class GoogleDocLoaderPlugin(BaseModel):
         # Need to store in a separate db for the cleartext, with the same chunking of elements
         # Then, we can use the same ids to retrieve the cleartext for things like summarization
         # Now summarize the doc
-        return f"Document loaded successfully. Document Summary: {self._summarize_elements(elements, interim=interim)}"
+        summarized_doc = await self._summarize_elements(elements, interim=interim)
+        return f"Document loaded successfully. Document Summary: {summarized_doc}"
 
     
 # Thought: Instead of databasing the raw text of the doc, why don't we use gdocs as the database,
