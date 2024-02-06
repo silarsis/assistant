@@ -94,7 +94,8 @@ class Guide:
         self.guide.import_plugin(TextMemoryPlugin(), "text_memory")
         self.guide.import_plugin(ImageGenerationPlugin(), "image_generation")
         self.guide.import_plugin(ScrapeTextPlugin(), "scrape_text")
-        self.guide.import_plugin(GoogleSearchPlugin(), "google_search")
+        if os.environ.get("GOOGLE_API_KEY"):
+            self.guide.import_plugin(GoogleSearchPlugin(), "google_search")
         self.planner = StepwisePlanner(self.guide)
         print("Planner created")
 
@@ -106,9 +107,6 @@ class Guide:
         #     self.apify = apify.ApifyTool()
         #     tools.append(Tool(name='Scrape', func=self.apify.scrape_website, description="use when you need to scrape a website, provide the url as action input"))
         #     tools.append(Tool(name='Lookup', func=self.apify.query, description="use when you need to check if you already know something, provide the query as action input"))
-        if os.environ.get("GOOGLE_API_KEY"):
-            search = GoogleSearchAPIWrapper()
-            tools.append(Tool(name="Search", func=search.run, description="use when you need to search for something on the internet"))
         print(f"Tools: {[tool.name for tool in tools]}")
         return tools
 
@@ -134,7 +132,18 @@ class Guide:
         # If so, we could force rephrasing that way.
         prompt = PromptTemplate(
             self.default_character, 
-            f'You were asked "{input}" and you worked out the answer to be "{answer.mesg}". Please respond to the user.'
+            f"""
+You were asked "{input}" and your planning suggests the answer to be "{answer.mesg}".
+Please respond to the user with this answer. If your chat history suggests a better answer, please use that instead.
+
+Context:
+{{$context}}
+
+Chat History:
+{{$history}}
+
+Answer: 
+            """
         ).get(session_id, self.guide)
         ctx = self.guide.create_new_context()
         ctx.variables['input'] = answer.mesg
@@ -149,6 +158,10 @@ class Guide:
         history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
         self.memory.add_message(role="Human", content=f"Human: {prompt}", session_id=session_id)
+        # Now, we go straight into plan, but I wonder if we should check the memory first
+        # and the doc storage, and then plan? Hrm. Right now, planning returns a response
+        # that doesn't take any chat history or other memory into account, which is a bit
+        # frustrating.
         response = await self._plan(prompt, callback=callback, hear_thoughts=hear_thoughts)
         if response:
             if hear_thoughts:
