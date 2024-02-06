@@ -26,6 +26,7 @@ from models.plugins.GoogleDocs import GoogleDocLoaderPlugin
 from models.plugins.GoogleSearch import GoogleSearchPlugin
 from models.plugins.ImageGeneration import ImageGenerationPlugin
 from models.plugins.ScrapeText import ScrapeTextPlugin
+from models.plugins.CodeGeneration import CodeGenerationPlugin
 from semantic_kernel.core_plugins import FileIOPlugin, MathPlugin, TextPlugin, TimePlugin, TextMemoryPlugin
 
 DEFAULT_SESSION_ID = "static"
@@ -96,6 +97,7 @@ class Guide:
         self.guide.import_plugin(ScrapeTextPlugin(), "scrape_text")
         if os.environ.get("GOOGLE_API_KEY"):
             self.guide.import_plugin(GoogleSearchPlugin(), "google_search")
+        self.guide.import_plugin(CodeGenerationPlugin(kernel=self.guide), "code_generation")
         self.planner = StepwisePlanner(self.guide)
         print("Planner created")
 
