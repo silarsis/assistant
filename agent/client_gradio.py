@@ -146,16 +146,21 @@ class Agent(BaseModel):
         print("Requesting TTS from Local TTS instance")
         with requests.get(f"http://{TTS_HOST}:{TTS_PORT}/api/tts?text={q_text}&speaker_id=p364&style_wav=&language_id=", stream=True) as wav:
             p = pyaudio.PyAudio()
-            wf = wave.Wave_read(wav.raw)
-            stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
-                            channels=1,
-                            rate=22050,
-                            output=True)
-            while len(data := wf.readframes(1024)):
-                stream.write(data)
-            stream.stop_stream()
-            stream.close()
-            p.terminate()
+            try:
+                wf = wave.Wave_read(wav.raw)
+            except wave.Error as e:
+                print(e)
+                wf = None
+            if wf:
+                stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
+                                channels=1,
+                                rate=22050,
+                                output=True)
+                while len(data := wf.readframes(1024)):
+                    stream.write(data)
+                stream.stop_stream()
+                stream.close()
+                p.terminate()
             
     def elevenlabs_get_stream(self, text: str = '') -> bytes:
         elevenlabs.set_api_key(os.environ.get('ELEVENLABS_API_KEY'))
