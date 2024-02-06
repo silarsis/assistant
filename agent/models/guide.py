@@ -151,7 +151,20 @@ Answer:
         ctx.variables['input'] = answer.mesg
         result = await prompt.invoke(context=ctx)
         return Thought(mesg=str(result).strip())
-
+    
+    async def _pick_best_answer(self, prompt: str, response1: Message, response2: Message) -> str:
+        # Ask the guide which is the better response
+        query = self.guide.create_semantic_function(
+            prompt_template=f"You have been tasked with answering the following: {prompt}\nSelect the most informative and accurate response from the following two responses and indicate your selection by sendingeither 'response 1' or 'response 2':\n\nResponse 1:\n{response1}\n\nResponse 2:\n\n{response2}\n", 
+            max_tokens=2000, temperature=0.2, top_p=0.5)
+        result = await query.invoke()
+        print(result)
+        print(f"Response 1: {response1}")
+        print(f"Response 2: {response2}")
+        if '1' in str(result):
+            return response1
+        return response2
+    
     async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> Message:
         if not prompt:
             await callback(Response(mesg="I'm afraid I don't have enough context to respond. Could you please rephrase your question?", final=True))
@@ -164,15 +177,13 @@ Answer:
         # and the doc storage, and then plan? Hrm. Right now, planning returns a response
         # that doesn't take any chat history or other memory into account, which is a bit
         # frustrating.
+        # Temporarily removing the planning, which means removing all the tools :/
         response = await self._plan(prompt, callback=callback, hear_thoughts=hear_thoughts)
         if response:
-            if hear_thoughts:
-                await callback(Thought(mesg=f"Rephrasing the answer from plugins: {response.mesg}"))
             response = await self.rephrase(prompt, response, history, history_context, session_id=session_id)
-        else:
-            # If planning fails, try a chat
-            response = await self.direct_responder.response(history_context, history, prompt, session_id=session_id)
-        self.memory.add_message(role="AI", content=f"Response: {response.mesg}\n", session_id=session_id)
+        direct_response = await self.direct_responder.response(history_context, history, prompt, session_id=session_id)
+        best_response = await self._pick_best_answer(prompt, response, direct_response)
+        self.memory.add_message(role="AI", content=f"Response: {best_response.mesg}\n", session_id=session_id)
         final_response = Response(mesg=response.mesg)
         await callback(final_response)
 
