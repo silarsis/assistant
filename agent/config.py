@@ -17,7 +17,10 @@ class JsonConfigSettingsSource(PydanticBaseSettingsSource): # Taken from https:/
 
     def get_field_value(self, field: FieldInfo, field_name: str) -> Tuple[Any, str, bool]:
         encoding = self.config.get('env_file_encoding')
-        file_content_json = json.loads(Path('.env.json').read_text(encoding))
+        try:
+            file_content_json = json.loads(Path('.env.json').read_text(encoding))
+        except FileNotFoundError:
+            pass # We can ignore if it's not there.
         field_value = file_content_json.get(field_name)
         return field_value, field_name, False
 
