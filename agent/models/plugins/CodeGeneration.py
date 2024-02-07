@@ -4,6 +4,8 @@ import os
 
 from semantic_kernel.plugin_definition import kernel_function, kernel_function_context_parameter
 
+from config import settings
+
 
 CHARACTER="You are an expert developer who has a special interest in security.\n"
 PROMPT="Generate code according to the following specifications:\n{{$input}}"
@@ -11,10 +13,10 @@ PROMPT="Generate code according to the following specifications:\n{{$input}}"
 class CodeGenerationPlugin(BaseModel):
     kernel: Any = None
     prompt: Any = None
-    api_key: str = os.environ.get("IMG_OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY", ""))
-    base_url: str = os.environ.get("IMG_OPENAI_API_BASE", os.environ.get("OPENAI_API_BASE", None))
-    api_version: str = os.environ.get("IMG_OPENAI_API_VERSION", os.environ.get("OPENAI_API_VERSION", "2023-06-01-preview"))
-    org_id: str = os.environ.get("IMG_OPENAI_ORG_ID", os.environ.get("OPENAI_ORG_ID", None))
+    api_key: str = os.environ.get("IMG_OPENAI_API_KEY", settings.openai_api_key)
+    base_url: str = os.environ.get("IMG_OPENAI_API_BASE", settings.openai_api_base)
+    api_version: str = os.environ.get("IMG_OPENAI_API_VERSION", settings.openai_api_version)
+    org_id: str = os.environ.get("IMG_OPENAI_ORG_ID", settings.openai_org_id)
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

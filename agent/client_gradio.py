@@ -20,17 +20,13 @@ from models.guide import Guide, DEFAULT_SESSION_ID
 from transformers import pipeline
 
 from pydantic import BaseModel
+from pydantic_settings import BaseSettings
 from pydantic.types import Any
 import numpy as np
 from numpy.typing import ArrayLike
 
+from config import settings
 
-TTS_HOST=os.environ.get("TTS_HOST", "localhost")
-TTS_PORT=os.environ.get("TTS_PORT", "5002")
-        
-
-
-            
 # def google_logout():
 #     if "_credentials" in st.session_state:
 #         st.session_state._credentials = None
@@ -38,20 +34,22 @@ TTS_PORT=os.environ.get("TTS_PORT", "5002")
 #         with st.chat_message("assistant"):
 #             st.markdown(response.mesg)
 
-
 transcriber = pipeline("automatic-speech-recognition", model="openai/whisper-base.en")
 
 class Agent(BaseModel):
     _character: str = ""
     _agent: Guide = None
     _audio_model: Any = None
-    speech_engine: str = os.environ.get('VOICE', 'None')
+    speech_engine: str = settings.voice
     _google_credentials: Any = None
     
     def __init__(self, **kwargs):
         super().__init__()
-        if 'character' in kwargs:
-            self._character = kwargs['character']
+        self._connect(character=kwargs.get('character', None))
+        
+    def _connect(self, character: str = None):
+        if character:
+            self._character = character
         else:
             if os.path.exists('./character.txt'):
                 filename = './character.txt'
@@ -103,7 +101,7 @@ class Agent(BaseModel):
         # Need to work out how to send this to the chat window
         
     def set_speech_engine(self, value: str) -> str:
-        self.speech_engine = value
+        settings.voice = value
         return value
     
     def _clean_text_for_speech(self, text: str) -> str:
@@ -118,19 +116,19 @@ class Agent(BaseModel):
         
     def speak(self, payload: str = ''):
         payload = self._clean_text_for_speech(payload)
-        if self.speech_engine == 'None':
+        if settings.voice == 'None':
             print("No speech engine")
             return (None, None)
-        if self.speech_engine == 'ElevenLabs':
+        if settings.voice == 'ElevenLabs':
             print("Elevenlabs TTS")
             return (None, b"".join([bytes(a) for a in self.elevenlabs_get_stream(text=payload)]))
-        elif self.speech_engine == 'OpenAI':
+        elif settings.voice == 'OpenAI':
             print("OpenAI TTS")
             client = OpenAI()
             response = client.audio.speech.create(model='tts-1', voice='nova', input=payload)
             retval = (None, b''.join(response.iter_bytes()))
             return retval
-        elif self.speech_engine == 'TTS':
+        elif settings.voice == 'TTS':
             print("Local TTS")
             try:
                 return (self.tts_get_stream(payload), None)
@@ -138,13 +136,13 @@ class Agent(BaseModel):
                 print(f"Speech error, not speaking: {e}")
                 return (None, None)
         else:
-            print(f"Unknown speech engine {self.speech_engine}")
+            print(f"Unknown speech engine {settings.voice}")
             return (None, None)
             
     def tts_get_stream(self, text: str) -> bytes:
         q_text = quote(text)
         print("Requesting TTS from Local TTS instance")
-        with requests.get(f"http://{TTS_HOST}:{TTS_PORT}/api/tts?text={q_text}&speaker_id=p364&style_wav=&language_id=", stream=True) as wav:
+        with requests.get(f"http://{settings.tts_host}:{settings.tts_port}/api/tts?text={q_text}&speaker_id=p364&style_wav=&language_id=", stream=True) as wav:
             p = pyaudio.PyAudio()
             try:
                 wf = wave.Wave_read(wav.raw)
@@ -163,8 +161,8 @@ class Agent(BaseModel):
                 p.terminate()
             
     def elevenlabs_get_stream(self, text: str = '') -> bytes:
-        elevenlabs.set_api_key(os.environ.get('ELEVENLABS_API_KEY'))
-        voices = [os.environ.get('ELEVENLABS_VOICE_1_ID'), os.environ.get('ELEVENLABS_VOICE_2_ID')]
+        elevenlabs.set_api_key(settings.elevenlabs_api_key)
+        voices = [settings.elevenlabs_voice_1_id, settings.elevenlabs_voice_2_id]
         try:
             audio_stream = elevenlabs.generate(text=text, voice=voices[0], stream=True)
         except elevenlabs.api.error.RateLimitError as err:
@@ -185,15 +183,43 @@ class Agent(BaseModel):
         )
         response = self._agent.update_google_docs_token(self._google_credentials)
         return response.mesg
+    
+    def update_api_keys(self, api_type: str, api_key: str, api_base: str, deployment_name: str) -> str:
+        settings.openai_api_type = api_type
+        settings.openai_api_key = api_key
+        settings.openai_api_base = api_base
+        settings.openai_deployment_name = deployment_name
+        # Reconnect to OpenAI here - chance to update the character also
+        self._connect(character=self._character)
+        return [api_type, api_key, api_base, deployment_name]
+    
+    def update_character(self, character: str) -> str:
+        self._character = character
+        # Reconnect to OpenAI here - chance to update the character also
+        self._connect(character=character)
+        return character
 
 agent = Agent()
 
 with gr.Blocks() as demo:
-    with gr.Accordion("Settings", open=True):
-        speech_engine = gr.Dropdown(["None", "ElevenLabs", "OpenAI", "TTS"], label="Speech Engine", value=os.environ.get('VOICE', 'None'), interactive=True)
+    with gr.Accordion("Settings", open=False):
+        speech_engine = gr.Dropdown(["None", "ElevenLabs", "OpenAI", "TTS"], label="Speech Engine", value=settings.voice, interactive=True)
         speech_engine.input(agent.set_speech_engine, [speech_engine], [speech_engine])
         google_login_button = gr.Button("Google Login")
         google_login_button.click(agent.google_login, [google_login_button], [google_login_button])
+        with gr.Accordion("OpenAI Keys", open=False):
+            api_config = [
+                gr.Dropdown(["openai", "azure"], label="API Type", value=settings.openai_api_type, interactive=True),
+                gr.Textbox(label="API Key", value=settings.openai_api_key, type="password"),
+                gr.Textbox(label="API Base URI", value=settings.openai_api_base, type="text"),
+                gr.Textbox(label="Deployment Name", value=settings.openai_deployment_name, type="text"),
+            ]
+            api_update_button = gr.Button("Update")
+            api_update_button.click(agent.update_api_keys, api_config, api_config)
+        with gr.Accordion("Character", open=False):
+            char = gr.Textbox(agent._character, show_copy_button=True, lines=5)
+            char_btn = gr.Button("Update")
+            char_btn.click(agent.update_character, [char], [char])
     with gr.Row():
         wav_speaker = gr.Audio(interactive=False, streaming=True, visible=False, format='wav', autoplay=True)
         mp3_speaker = gr.Audio(interactive=False, visible=False, format='mp3', autoplay=True)

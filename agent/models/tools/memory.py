@@ -4,8 +4,7 @@ import os
 
 import semantic_kernel as sk
 
-MOTORHEAD_HOST=os.environ.get('MOTORHEAD_HOST', 'motorhead')
-MOTORHEAD_PORT=os.environ.get('MOTORHEAD_PORT', '8001')
+from config import settings
 
 class LocalMemory:
     context: Optional[str] = None
@@ -61,7 +60,7 @@ Summary:
         return self.context.setdefault(session_id, "")
     
 class MotorheadMemory:
-    url: str = f"http://{MOTORHEAD_HOST}:{MOTORHEAD_PORT}"
+    url: str = f"http://{settings.motorhead_host}:{settings.motorhead_port}"
     timeout = 3000
     memory_key = "history"
     context: Optional[str] = None

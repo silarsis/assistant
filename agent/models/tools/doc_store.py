@@ -7,6 +7,7 @@ import chromadb
 from chromadb.config import Settings
 from chromadb.utils import embedding_functions
 
+from config import settings
 
 class DocStore(BaseModel):
     _vector_stores: dict = {}
@@ -15,7 +16,10 @@ class DocStore(BaseModel):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._embeddings = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
-        self._connect_to_local_chromadb()
+        if settings.chroma_mode == 'remote':
+            self._connect_to_remote_chromadb()
+        else:
+            self._connect_to_local_chromadb()
         
     def _connect_to_local_chromadb(self):
         self._chroma_client = chromadb.PersistentClient(
@@ -27,8 +31,8 @@ class DocStore(BaseModel):
         while True:
             try:
                 self._chroma_client = chromadb.HttpClient(
-                    host=os.environ.get('CHROMA_HOST', 'localhost'), 
-                    port=os.environ.get('CHROMA_PORT', '6000'), 
+                    host=settings.chroma_host, 
+                    port=settings.chroma_port, 
                     settings=Settings(anonymized_telemetry=False))
             except ValueError as e:
                 if 'Could not connect' in str(e):

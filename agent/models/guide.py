@@ -3,6 +3,7 @@ import base64
 from typing import List, Optional, Callable, Any, Literal
 import os
 from dotenv import load_dotenv
+import asyncio
 
 from pydantic import BaseModel
 
@@ -28,6 +29,8 @@ from models.plugins.ImageGeneration import ImageGenerationPlugin
 from models.plugins.ScrapeText import ScrapeTextPlugin
 from models.plugins.CodeGeneration import CodeGenerationPlugin
 from semantic_kernel.core_plugins import FileIOPlugin, MathPlugin, TextPlugin, TimePlugin, TextMemoryPlugin
+
+from config import settings
 
 DEFAULT_SESSION_ID = "static"
 
@@ -55,18 +58,14 @@ class Thought(Message):
 def getKernel(model: Optional[str] = "") -> sk.Kernel:
     load_dotenv(dotenv_path=".env")
     kernel = sk.Kernel()
-    deployment_name = os.environ.get("OPENAI_DEPLOYMENT_NAME", "")
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    endpoint = os.environ.get("OPENAI_API_BASE", None)
-    org_id = os.environ.get("OPENAI_ORG_ID", None)
-    model = model or os.environ.get("OPENAI_DEPLOYMENT_NAME", "gpt-4")
-    if os.environ.get("OPENAI_API_TYPE") == "azure":
+    model = model or settings.openai_deployment_name or "gpt-4"
+    if settings.openai_api_type == "azure":
         print("Azure")
-        client = AsyncAzureOpenAI(api_key=api_key, organization=org_id, base_url=endpoint)
-        kernel.add_chat_service("echo", AzureChatCompletion(deployment_name, async_client=client))
+        client = AsyncAzureOpenAI(api_key=settings.openai_api_key, organization=settings.openai_org_id, base_url=settings.openai_api_base)
+        kernel.add_chat_service("echo", AzureChatCompletion(settings.openai_deployment_name, async_client=client))
     else:
         print("OpenAI")
-        client = AsyncOpenAI(api_key=api_key, organization=org_id, base_url=endpoint)
+        client = AsyncOpenAI(api_key=settings.openai_api_key, organization=settings.openai_org_id, base_url=settings.openai_api_base)
         kernel.add_chat_service("echo", OpenAIChatCompletion(model, async_client=client))
     return kernel
 
@@ -86,8 +85,8 @@ class Guide:
         # self.guide.import_plugin(ScrapeTextPlugin, "ScrapeText")
         self._google_docs = GoogleDocLoaderPlugin(kernel=self.guide)
         self.guide.import_plugin(self._google_docs, "gdoc")
-        if os.environ.get("WOLFRAM_ALPHA_APPID"):
-            self.guide.import_plugin(WolframAlphaPlugin(wolfram_alpha_appid=os.environ.get("WOLFRAM_ALPHA_APPID")), "wolfram")
+        if settings.wolfram_alpha_appid:
+            self.guide.import_plugin(WolframAlphaPlugin(wolfram_alpha_appid=settings.wolfram_alpha_appid), "wolfram")
         self.guide.import_plugin(MathPlugin(), "math")
         self.guide.import_plugin(FileIOPlugin(), "fileIO")
         self.guide.import_plugin(TimePlugin(), "time")
@@ -95,7 +94,7 @@ class Guide:
         self.guide.import_plugin(TextMemoryPlugin(), "text_memory")
         self.guide.import_plugin(ImageGenerationPlugin(), "image_generation")
         self.guide.import_plugin(ScrapeTextPlugin(), "scrape_text")
-        if os.environ.get("GOOGLE_API_KEY"):
+        if settings.google_api_key: # Note this relies on the env variable being set, check this
             self.guide.import_plugin(GoogleSearchPlugin(), "google_search")
         self.guide.import_plugin(CodeGenerationPlugin(kernel=self.guide), "code_generation")
         self.planner = StepwisePlanner(self.guide)
@@ -112,15 +111,13 @@ class Guide:
         print(f"Tools: {[tool.name for tool in tools]}")
         return tools
 
-    async def _plan(self, goal: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False) -> Message:
+    async def _plan(self, goal: str, callback: Callable[[str], None], history_context: str, history: str, session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False) -> Message:
         try:
             plan = self.planner.create_plan(goal=goal)
             if hear_thoughts:
                 pass
                 #callback(Thought(mesg=f"Planning result"))
-            context = self.guide.create_new_context()
-            context.variables.set("session_id", session_id)
-            result = await plan.invoke(context=context)
+            result = await plan.invoke()
         except Exception as e:
             print(f"Planning failed: {e}")
             if hear_thoughts:
@@ -135,8 +132,9 @@ class Guide:
         prompt = PromptTemplate(
             self.default_character, 
             f"""
-You were asked "{input}" and your planning suggests the answer to be "{answer.mesg}".
-Please respond to the user with this answer. If your chat history suggests a better answer, please use that instead.
+You were asked "{input}" and your subordinate helpers suggests the answer to be "{answer.mesg}".
+Please respond to the user with this answer. If your chat history or context suggests a better answer, please use that instead.
+Check the chat history and context for answers to the question also.
 
 Context:
 {{$context}}
@@ -149,13 +147,21 @@ Answer:
         ).get(session_id, self.guide)
         ctx = self.guide.create_new_context()
         ctx.variables['input'] = answer.mesg
+        ctx.variables['history'] = history
+        ctx.variables['history_context'] = history_context
         result = await prompt.invoke(context=ctx)
         return Thought(mesg=str(result).strip())
     
     async def _pick_best_answer(self, prompt: str, response1: Message, response2: Message) -> str:
         # Ask the guide which is the better response
+        prompt_template = f"""
+You have been tasked with answering the following: {prompt}.
+Select the response that has the most information in it from the following two responses and indicate your selection by sending either 'response 1' or 'response 2':
+Response 1: {response1}
+Response 2: {response2}
+        """
         query = self.guide.create_semantic_function(
-            prompt_template=f"You have been tasked with answering the following: {prompt}\nSelect the most informative and accurate response from the following two responses and indicate your selection by sendingeither 'response 1' or 'response 2':\n\nResponse 1:\n{response1}\n\nResponse 2:\n\n{response2}\n", 
+            prompt_template=f"You have been tasked with answering the following: {prompt}\nSelect the most informative response from the following two responses and indicate your selection by sending either 'response 1' or 'response 2':\n\nResponse 1:\n{response1}\n\nResponse 2:\n\n{response2}\n", 
             max_tokens=2000, temperature=0.2, top_p=0.5)
         result = await query.invoke()
         print(result)
@@ -178,13 +184,15 @@ Answer:
         # that doesn't take any chat history or other memory into account, which is a bit
         # frustrating.
         # Temporarily removing the planning, which means removing all the tools :/
-        response = await self._plan(prompt, callback=callback, hear_thoughts=hear_thoughts)
+        response, direct_response = await asyncio.gather(
+            self._plan(prompt, callback, history_context, history, hear_thoughts=hear_thoughts),
+            self.direct_responder.response(history_context, history, prompt, session_id=session_id)
+        )
         if response:
             response = await self.rephrase(prompt, response, history, history_context, session_id=session_id)
-        direct_response = await self.direct_responder.response(history_context, history, prompt, session_id=session_id)
         best_response = await self._pick_best_answer(prompt, response, direct_response)
         self.memory.add_message(role="AI", content=f"Response: {best_response.mesg}\n", session_id=session_id)
-        final_response = Response(mesg=response.mesg)
+        final_response = Response(mesg=best_response.mesg)
         await callback(final_response)
 
     async def upload_file_with_callback(self, file_data: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> None:

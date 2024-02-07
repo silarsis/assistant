@@ -5,3 +5,8 @@ volumes/*
 **/.venv/
 credentials.json
 client/speech.mpeg
+# The following 3 are for pyinstaller
+agent/build/client_gradio/base_library.zip
+agent/dist/
+agent/build/
+.DS_Store

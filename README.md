@@ -5,7 +5,7 @@ This project is to tie together various LLM-related pieces, to try and build an 
 ## How to Use
 
 Checkout the source code, cd to the "agent" directory, run `python -m pip install --upgrade -r requirements.txt` to install dependencies.
-thenhen run `python ./client_gradio.py` to start the agent, and look for the locahost URI printed in the output - you should
+then run `python ./client_gradio.py` to start the agent, and look for the locahost URI printed in the output - you should
 be able to web browse to that.
 
 If you have API keys for various things, you can look at the .env-template files - rename them to .env and add
