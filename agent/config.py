@@ -4,6 +4,7 @@ from typing import Optional, Literal
 class AppSettings(BaseSettings):
     # Read the .env file
     model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
+    # XXX Can I load the contents of the character file here as a variable?
     
     # OpenAI/Azure API key and configuration
     openai_api_type: Literal["openai", "azure"] = "openai"
