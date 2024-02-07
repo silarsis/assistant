@@ -178,22 +178,25 @@ Response 2: {response2}
         # Convert the prompt to character + history
         history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
-        self.memory.add_message(role="Human", content=f"Human: {prompt}", session_id=session_id)
         # Now, we go straight into plan, but I wonder if we should check the memory first
         # and the doc storage, and then plan? Hrm. Right now, planning returns a response
         # that doesn't take any chat history or other memory into account, which is a bit
         # frustrating.
         # Temporarily removing the planning, which means removing all the tools :/
-        response, direct_response = await asyncio.gather(
+        _, response, direct_response = await asyncio.gather(
+            self.memory.add_message(role="Human", content=f"Human: {prompt}", session_id=session_id),
             self._plan(prompt, callback, history_context, history, hear_thoughts=hear_thoughts),
             self.direct_responder.response(history_context, history, prompt, session_id=session_id)
         )
         if response:
             response = await self.rephrase(prompt, response, history, history_context, session_id=session_id)
         best_response = await self._pick_best_answer(prompt, response, direct_response)
-        self.memory.add_message(role="AI", content=f"Response: {best_response.mesg}\n", session_id=session_id)
         final_response = Response(mesg=best_response.mesg)
-        await callback(final_response)
+        await asyncio.gather(
+            self.memory.add_message(role="AI", content=f"Response: {best_response.mesg}\n", session_id=session_id),
+            callback(final_response)
+        )
+        return None
 
     async def upload_file_with_callback(self, file_data: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> None:
         file = base64.b64decode(file_data)
