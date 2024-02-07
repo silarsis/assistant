@@ -87,13 +87,14 @@ class Agent(BaseModel):
         history.append([input, "Thinking..."])
         yield(["", history, None, None])
         recvQ = asyncio.Queue()
-        asyncio.create_task(self._agent.prompt_with_callback(input, callback=recvQ.put, session_id=DEFAULT_SESSION_ID, hear_thoughts=False))
-        history[-1][1] = ''
-        while response := await recvQ.get():
-            history[-1][1] += response.mesg
-            yield(["", history] + list(self.speak(response.mesg)))
-            if response.final:
-                break
+        async with asyncio.TaskGroup() as tg:
+            prompt_task = tg.create_task(self._agent.prompt_with_callback(input, name="prompt", callback=recvQ.put, session_id=DEFAULT_SESSION_ID, hear_thoughts=False))
+            history[-1][1] = ''
+            while response := await recvQ.get():
+                history[-1][1] += response.mesg
+                yield(["", history] + list(self.speak(response.mesg)))
+                if response.final: # Could also check here if the task is complete?
+                    break
     
     async def recv_from_bot(self, response: str):
         print(f"Received via recv_from_bot callback: {response}")
@@ -190,14 +191,19 @@ class Agent(BaseModel):
         settings.openai_api_key = api_key
         settings.openai_api_base = api_base
         settings.openai_deployment_name = deployment_name
-        # Reconnect to OpenAI here - chance to update the character also
         self._connect(character=self._character)
+        settings.save()
+        return [api_type, api_key, api_base, deployment_name]
+    
+    def update_img_api_keys(self, api_type: str, api_key: str, api_base: str) -> str:
+        settings.img_openai_api_type = api_type
+        settings.img_openai_api_key = api_key
+        settings.img_openai_api_base = api_base
         settings.save()
         return [api_type, api_key, api_base, deployment_name]
     
     def update_character(self, character: str) -> str:
         self._character = character
-        # Reconnect to OpenAI here - chance to update the character also
         self._connect(character=character)
         return character
 
@@ -205,11 +211,11 @@ agent = Agent()
 
 with gr.Blocks() as demo:
     with gr.Accordion("Settings", open=False):
-        speech_engine = gr.Dropdown(["None", "ElevenLabs", "OpenAI", "TTS"], label="Speech Engine", value=settings.voice, interactive=True)
-        speech_engine.input(agent.set_speech_engine, [speech_engine], [speech_engine])
         google_login_button = gr.Button("Google Login")
         google_login_button.click(agent.google_login, [google_login_button], [google_login_button])
-        with gr.Accordion("OpenAI Keys", open=False):
+        speech_engine = gr.Dropdown(["None", "ElevenLabs", "OpenAI", "TTS"], label="Speech Engine", value=settings.voice, interactive=True)
+        speech_engine.input(agent.set_speech_engine, [speech_engine], [speech_engine])
+        with gr.Accordion("Main LLM Keys", open=False):
             api_config = [
                 gr.Dropdown(["openai", "azure"], label="API Type", value=settings.openai_api_type, interactive=True),
                 gr.Textbox(label="API Key", value=settings.openai_api_key, type="password"),
@@ -218,7 +224,15 @@ with gr.Blocks() as demo:
             ]
             api_update_button = gr.Button("Update")
             api_update_button.click(agent.update_api_keys, api_config, api_config)
-        with gr.Accordion("Character", open=False):
+        with gr.Accordion("Image Generation Keys", open=False):
+            api_config = [
+                gr.Dropdown(["openai", "azure"], label="API Type", value=settings.img_openai_api_type, interactive=True),
+                gr.Textbox(label="API Key", value=settings.img_openai_api_key, type="password"),
+                gr.Textbox(label="API Base URI", value=settings.img_openai_api_base, type="text"),
+            ]
+            api_update_button = gr.Button("Update")
+            api_update_button.click(agent.update_img_api_keys, api_config, api_config)
+        with gr.Accordion("Character (does not persist yet)", open=False):
             char = gr.Textbox(agent._character, show_copy_button=True, lines=5)
             char_btn = gr.Button("Update")
             char_btn.click(agent.update_character, [char], [char])
