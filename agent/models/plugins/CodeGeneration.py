@@ -2,7 +2,6 @@ from pydantic import BaseModel
 from typing import Any
 import os
 
-import openai
 from semantic_kernel.plugin_definition import kernel_function, kernel_function_context_parameter
 
 
@@ -28,7 +27,7 @@ class CodeGenerationPlugin(BaseModel):
         input_description="Specification of the code needed"
     )
     @kernel_function_context_parameter(
-        name="specificaion",
+        name="specification",
         description="The code specification"
     )
     async def gen_code(self, specification: str = "") -> str:
