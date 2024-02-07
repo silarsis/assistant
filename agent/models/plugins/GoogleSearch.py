@@ -5,12 +5,13 @@ from semantic_kernel.plugin_definition import kernel_function
 
 from langchain_community.utilities import GoogleSearchAPIWrapper
 
+from config import settings
 
 class GoogleSearchPlugin(BaseModel):
     @kernel_function(description="Scrape text from a website", name="search")
     async def search(self, query: str) -> str:
         """Use the Google Search API to search for and return results for the given query"""
-        if os.environ.get("GOOGLE_API_KEY"):
+        if settings.google_api_key:
             search = GoogleSearchAPIWrapper()
             results = search.run(query)
         else:

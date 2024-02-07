@@ -25,3 +25,5 @@ opentelemetry-sdk
 opentelemetry-exporter-otlp
 gradio
 torchaudio
+pydantic
+pydantic-settings

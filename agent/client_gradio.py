@@ -20,17 +20,13 @@ from models.guide import Guide, DEFAULT_SESSION_ID
 from transformers import pipeline
 
 from pydantic import BaseModel
+from pydantic_settings import BaseSettings
 from pydantic.types import Any
 import numpy as np
 from numpy.typing import ArrayLike
 
+from config import settings
 
-TTS_HOST=os.environ.get("TTS_HOST", "localhost")
-TTS_PORT=os.environ.get("TTS_PORT", "5002")
-        
-
-
-            
 # def google_logout():
 #     if "_credentials" in st.session_state:
 #         st.session_state._credentials = None
@@ -38,14 +34,13 @@ TTS_PORT=os.environ.get("TTS_PORT", "5002")
 #         with st.chat_message("assistant"):
 #             st.markdown(response.mesg)
 
-
 transcriber = pipeline("automatic-speech-recognition", model="openai/whisper-base.en")
 
 class Agent(BaseModel):
     _character: str = ""
     _agent: Guide = None
     _audio_model: Any = None
-    speech_engine: str = os.environ.get('VOICE', 'None')
+    speech_engine: str = settings.voice
     _google_credentials: Any = None
     
     def __init__(self, **kwargs):
@@ -144,7 +139,7 @@ class Agent(BaseModel):
     def tts_get_stream(self, text: str) -> bytes:
         q_text = quote(text)
         print("Requesting TTS from Local TTS instance")
-        with requests.get(f"http://{TTS_HOST}:{TTS_PORT}/api/tts?text={q_text}&speaker_id=p364&style_wav=&language_id=", stream=True) as wav:
+        with requests.get(f"http://{settings.tts_host}:{settings.tts_port}/api/tts?text={q_text}&speaker_id=p364&style_wav=&language_id=", stream=True) as wav:
             p = pyaudio.PyAudio()
             try:
                 wf = wave.Wave_read(wav.raw)
@@ -163,8 +158,8 @@ class Agent(BaseModel):
                 p.terminate()
             
     def elevenlabs_get_stream(self, text: str = '') -> bytes:
-        elevenlabs.set_api_key(os.environ.get('ELEVENLABS_API_KEY'))
-        voices = [os.environ.get('ELEVENLABS_VOICE_1_ID'), os.environ.get('ELEVENLABS_VOICE_2_ID')]
+        elevenlabs.set_api_key(settings.elevenlabs_api_key)
+        voices = [settings.elevenlabs_voice_1_id, settings.elevenlabs_voice_2_id]
         try:
             audio_stream = elevenlabs.generate(text=text, voice=voices[0], stream=True)
         except elevenlabs.api.error.RateLimitError as err:
@@ -190,7 +185,7 @@ agent = Agent()
 
 with gr.Blocks() as demo:
     with gr.Accordion("Settings", open=True):
-        speech_engine = gr.Dropdown(["None", "ElevenLabs", "OpenAI", "TTS"], label="Speech Engine", value=os.environ.get('VOICE', 'None'), interactive=True)
+        speech_engine = gr.Dropdown(["None", "ElevenLabs", "OpenAI", "TTS"], label="Speech Engine", value=settings.voice, interactive=True)
         speech_engine.input(agent.set_speech_engine, [speech_engine], [speech_engine])
         google_login_button = gr.Button("Google Login")
         google_login_button.click(agent.google_login, [google_login_button], [google_login_button])
