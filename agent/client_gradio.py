@@ -88,7 +88,7 @@ class Agent(BaseModel):
         yield(["", history, None, None])
         recvQ = asyncio.Queue()
         async with asyncio.TaskGroup() as tg:
-            prompt_task = tg.create_task(self._agent.prompt_with_callback(input, name="prompt", callback=recvQ.put, session_id=DEFAULT_SESSION_ID, hear_thoughts=False))
+            prompt_task = tg.create_task(self._agent.prompt_with_callback(input, callback=recvQ.put, session_id=DEFAULT_SESSION_ID, hear_thoughts=False), name="prompt")
             history[-1][1] = ''
             while response := await recvQ.get():
                 history[-1][1] += response.mesg
@@ -200,7 +200,7 @@ class Agent(BaseModel):
         settings.img_openai_api_key = api_key
         settings.img_openai_api_base = api_base
         settings.save()
-        return [api_type, api_key, api_base, deployment_name]
+        return [api_type, api_key, api_base]
     
     def update_character(self, character: str) -> str:
         self._character = character
