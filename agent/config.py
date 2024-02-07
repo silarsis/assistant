@@ -20,7 +20,7 @@ class JsonConfigSettingsSource(PydanticBaseSettingsSource): # Taken from https:/
         try:
             file_content_json = json.loads(Path('.env.json').read_text(encoding))
         except FileNotFoundError:
-            pass # We can ignore if it's not there.
+            file_content_json = {} # We can ignore if it's not there.
         field_value = file_content_json.get(field_name)
         return field_value, field_name, False
 
