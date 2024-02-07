@@ -1,4 +1,5 @@
 volumes/*
+.data/
 */.env
 .env
 .env.json
