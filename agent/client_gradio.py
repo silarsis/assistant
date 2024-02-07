@@ -102,6 +102,7 @@ class Agent(BaseModel):
         
     def set_speech_engine(self, value: str) -> str:
         settings.voice = value
+        settings.save()
         return value
     
     def _clean_text_for_speech(self, text: str) -> str:
@@ -191,6 +192,7 @@ class Agent(BaseModel):
         settings.openai_deployment_name = deployment_name
         # Reconnect to OpenAI here - chance to update the character also
         self._connect(character=self._character)
+        settings.save()
         return [api_type, api_key, api_base, deployment_name]
     
     def update_character(self, character: str) -> str:

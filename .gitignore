@@ -1,6 +1,7 @@
 volumes/*
 */.env
 .env
+.env.json
 **/*.pyc
 **/.venv/
 credentials.json
