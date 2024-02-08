@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Tuple
 import requests
 import os
 import json
@@ -64,15 +64,16 @@ Summary:
             return
         self.messages[session_id] = self.messages[session_id][-10:]
         ctx = self.kernel.create_new_context()
-        ctx['context'] = self.get_context(session_id)
+        ctx['context'] = self.context.setdefault(session_id, "") # get_context refreshes from file
         ctx['history'] = "\n".join([message["content"] for message in contextualise])
         response = await self.prompt(context=ctx)
+        self.context[session_id] = response.result
         return response.result
     
     async def add_message(self, role: str, content: str, session_id: str) -> None:
         self.messages.setdefault(session_id, []).append({"role": role, "content": content})
         if len(self.messages[session_id]) > 20:
-            self.context[session_id] = await self._summarise(session_id)
+            await self._summarise(session_id)
         self.save(session_id)
         
     def get_history(self, session_id: str) -> List[str]:
@@ -83,6 +84,16 @@ Summary:
     def get_formatted_history(self, session_id: str) -> str:
         history = self.get_history(session_id)
         return "\n".join(history)
+    
+    def get_history_for_chatbot(self, session_id: str) -> List[Tuple[str, str]]:
+        input_list = self.get_history(session_id)
+        retval = []
+        for i in range(0, len(input_list), 2):
+            try:
+                retval.append((input_list[i], input_list[i+1]))
+            except IndexError:
+                retval.append((input_list[-1], ""))
+        return retval
     
     def get_context(self, session_id: str) -> str:
         self.refresh_from(session_id)

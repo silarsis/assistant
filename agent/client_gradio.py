@@ -5,6 +5,7 @@ import requests
 import asyncio
 import time
 import re
+import functools
 
 from urllib.parse import quote
 
@@ -21,7 +22,7 @@ from transformers import pipeline
 
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
-from pydantic.types import Any
+from pydantic.types import Any, List, Union
 import numpy as np
 from numpy.typing import ArrayLike
 
@@ -36,12 +37,17 @@ from config import settings
 
 transcriber = pipeline("automatic-speech-recognition", model="openai/whisper-base.en")
 
+@functools.lru_cache()
+def elevenlabs_voices():
+    return [[voice.name, voice.voice_id] for voice in elevenlabs.voices()]
+
 class Agent(BaseModel):
     _character: str = ""
     _agent: Guide = None
     _audio_model: Any = None
     speech_engine: str = settings.voice
     _google_credentials: Any = None
+    session_id: str = DEFAULT_SESSION_ID
     
     def __init__(self, **kwargs):
         super().__init__()
@@ -58,6 +64,10 @@ class Agent(BaseModel):
             with open(filename, 'r') as char_file:
                 self._character = char_file.read()
         self._agent = Guide(default_character=self._character)
+        
+    def update_session_id(self, session_id: str) -> str:
+        self.session_id = session_id
+        return self.session_id
         
     async def process_audio(self, audio_state, audio_data: tuple[int, ArrayLike]):
         sample_rate, audio = audio_data
@@ -77,18 +87,26 @@ class Agent(BaseModel):
             # We're done listening, time to process
             pass
         return [audio_state, text]
+    
+    async def process_file_input(self, filename: str, history: list[list[str, str]], *args, **kwargs):
+        history.append([f"[{filename}](Uploaded file)", "Thinking..."])
+        yield([history, None, None])
+        recvQ = asyncio.Queue()
+        async with asyncio.TaskGroup() as tg:
+            prompt_task = tg.create_task(self._agent.prompt_file_with_callback(filename, callback=recvQ.put, session_id=self.session_id, hear_thoughts=False), name="prompt")
+            history[-1][1] = ''
+            while response := await recvQ.get():
+                history[-1][1] += response.mesg
+                yield([history] + list(self.speak(response.mesg)))
+                if response.final: # Could also check here if the task is complete?
+                    break
         
-    async def process_file_upload(self, file_data: str) -> str:
-        # Import the file, break it to it's constituent parts, save it in ChromaDB along with the other Google Docs.
-        # Need to refactor chromadb out of the gdocs plugin for general use, and build a retrieval plugin.
-        return
-        
-    async def process_input(self, input: str, history: list[list[str, str]], *args, **kwargs):
+    async def process_input(self, input: Union[str,bytes], history: list[list[str, str]], *args, **kwargs):
         history.append([input, "Thinking..."])
         yield(["", history, None, None])
         recvQ = asyncio.Queue()
         async with asyncio.TaskGroup() as tg:
-            prompt_task = tg.create_task(self._agent.prompt_with_callback(input, callback=recvQ.put, session_id=DEFAULT_SESSION_ID, hear_thoughts=False), name="prompt")
+            prompt_task = tg.create_task(self._agent.prompt_with_callback(input, callback=recvQ.put, session_id=self.session_id, hear_thoughts=False), name="prompt")
             history[-1][1] = ''
             while response := await recvQ.get():
                 history[-1][1] += response.mesg
@@ -202,25 +220,46 @@ class Agent(BaseModel):
         settings.save()
         return [api_type, api_key, api_base]
     
+    def el_up_api_key(self, api_key: str):
+        # Update ElevenLabs API key
+        settings.elevenlabs_api_key = api_key
+        settings.save()
+        
+    def el_up_voice1(self, voice1_id: str):
+        # Update ElevenLabs voice 1 ID
+        settings.elevenlabs_voice_1_id = voice1_id
+        settings.save()
+    
     def update_character(self, character: str) -> str:
         self._character = character
         self._connect(character=character)
         return character
+    
+    def get_history_for_chatbot(self):
+        return self._agent.memory.get_history_for_chatbot(self.session_id)
 
 agent = Agent()
 
 with gr.Blocks() as demo:
     with gr.Accordion("Settings", open=False):
-        google_login_button = gr.Button("Google Login")
-        google_login_button.click(agent.google_login, [google_login_button], [google_login_button])
+        with gr.Row():
+            with gr.Column(scale=4):
+                google_login_button = gr.Button("Google Login")
+                google_login_button.click(agent.google_login, [google_login_button], [google_login_button])
+            with gr.Column(scale=1):
+                sesid = gr.Textbox(label="Session ID", value=DEFAULT_SESSION_ID)
+                sesid.change(agent.update_session_id, [sesid], [sesid])
+                
         speech_engine = gr.Dropdown(["None", "ElevenLabs", "OpenAI", "TTS"], label="Speech Engine", value=settings.voice, interactive=True)
         speech_engine.input(agent.set_speech_engine, [speech_engine], [speech_engine])
         with gr.Accordion("ElevenLabs", open=False):
-            el_api_config = [
-                gr.Textbox(label="API Key", value=settings.elevenlabs_api_key, type="password"),
-                gr.Dropdown(["1", "2"], label="Voice 1", value=settings.elevenlabs_voice_1_id, interactive=True),
-                gr.Dropdown(["1", "2"], label="Voice 2", value=settings.elevenlabs_voice_2_id, interactive=True)
-            ]
+            with gr.Row():
+                with gr.Column(scale=1):
+                    el_api_key = gr.Textbox(label="API Key", value=settings.elevenlabs_api_key, type="password")
+                    el_api_key.input(agent.el_up_api_key, [el_api_key])
+                with gr.Column(scale=1):
+                    el_voice1 = gr.Dropdown(elevenlabs_voices(), label="Voice 1", value=settings.elevenlabs_voice_1_id, interactive=True)
+                    el_voice1.select(agent.el_up_voice1, [el_voice1])
         with gr.Accordion("Main LLM Keys", open=False):
             api_config = [
                 gr.Dropdown(["openai", "azure"], label="API Type", value=settings.openai_api_type, interactive=True),
@@ -245,7 +284,7 @@ with gr.Blocks() as demo:
     with gr.Row():
         wav_speaker = gr.Audio(interactive=False, streaming=True, visible=False, format='wav', autoplay=True)
         mp3_speaker = gr.Audio(interactive=False, visible=False, format='mp3', autoplay=True)
-    chatbot = gr.Chatbot([], bubble_full_width=False)
+    chatbot = gr.Chatbot(agent.get_history_for_chatbot, bubble_full_width=False)
     with gr.Row():
         txt = gr.Textbox(
             scale=4,
@@ -254,8 +293,8 @@ with gr.Blocks() as demo:
             container=False,
         )
         txt.submit(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
-        # btn = gr.UploadButton("📁", type="binary")
-        # btn.upload(agent.process_file_upload, [btn], [chatbot])
+        btn = gr.UploadButton("📁", type="filepath")
+        btn.upload(agent.process_file_input, [btn, chatbot], [chatbot, wav_speaker, mp3_speaker])
     with gr.Row():
         audio_state = gr.State()
         audio = gr.Audio(sources="microphone", streaming=True, autoplay=True)

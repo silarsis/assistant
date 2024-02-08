@@ -1,6 +1,6 @@
 ## Tools
 import base64
-from typing import List, Optional, Callable, Any, Literal
+from typing import List, Optional, Callable, Any, Literal, Union
 import os
 from dotenv import load_dotenv
 import asyncio
@@ -13,6 +13,7 @@ from langchain_community.utilities import GoogleSearchAPIWrapper
 # from models.tools import apify
 from models.tools.prompt_template import PromptTemplate
 from models.tools.memory import Memory
+from models.tools.openai_uploader import upload_image
 
 # New semantic kernel setup
 import semantic_kernel as sk
@@ -110,7 +111,7 @@ class Guide:
         #     tools.append(Tool(name='Lookup', func=self.apify.query, description="use when you need to check if you already know something, provide the query as action input"))
         print(f"Tools: {[tool.name for tool in tools]}")
         return tools
-
+    
     async def _plan(self, goal: str, callback: Callable[[str], None], history_context: str, history: str, session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False) -> Message:
         try:
             plan = self.planner.create_plan(goal=goal)
@@ -171,18 +172,23 @@ Response 2: {response2}
             return response1
         return response2
     
-    async def prompt_with_callback(self, prompt: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> Message:
+    async def prompt_file_with_callback(self, filename: bytes, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False) -> Message:
+        if not filename:
+            await callback(Response(mesg="No file name was provided. Please provide file data to prompt on.", final=True))
+            return
+        response = upload_image(filename)
+        if 'error' in response:
+            await callback(Response(mesg=f"There was an error uploading the file: {response['error']['message']}", final=True))
+            return
+        return await self.prompt_with_callback(response, callback, session_id=session_id, hear_thoughts=hear_thoughts)
+    
+    async def prompt_with_callback(self, prompt: Union[str,bytes], callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> Message:
         if not prompt:
             await callback(Response(mesg="I'm afraid I don't have enough context to respond. Could you please rephrase your question?", final=True))
             return
         # Convert the prompt to character + history
         history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
-        # Now, we go straight into plan, but I wonder if we should check the memory first
-        # and the doc storage, and then plan? Hrm. Right now, planning returns a response
-        # that doesn't take any chat history or other memory into account, which is a bit
-        # frustrating.
-        # Temporarily removing the planning, which means removing all the tools :/
         _, response, direct_response = await asyncio.gather(
             self.memory.add_message(role="Human", content=f"Human: {prompt}", session_id=session_id),
             self._plan(prompt, callback, history_context, history, hear_thoughts=hear_thoughts),
