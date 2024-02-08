@@ -215,6 +215,12 @@ with gr.Blocks() as demo:
         google_login_button.click(agent.google_login, [google_login_button], [google_login_button])
         speech_engine = gr.Dropdown(["None", "ElevenLabs", "OpenAI", "TTS"], label="Speech Engine", value=settings.voice, interactive=True)
         speech_engine.input(agent.set_speech_engine, [speech_engine], [speech_engine])
+        with gr.Accordion("ElevenLabs", open=False):
+            el_api_config = [
+                gr.Textbox(label="API Key", value=settings.elevenlabs_api_key, type="password"),
+                gr.Dropdown(["1", "2"], label="Voice 1", value=settings.elevenlabs_voice_1_id, interactive=True),
+                gr.Dropdown(["1", "2"], label="Voice 2", value=settings.elevenlabs_voice_2_id, interactive=True)
+            ]
         with gr.Accordion("Main LLM Keys", open=False):
             api_config = [
                 gr.Dropdown(["openai", "azure"], label="API Type", value=settings.openai_api_type, interactive=True),
