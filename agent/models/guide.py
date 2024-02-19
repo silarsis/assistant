@@ -1,14 +1,10 @@
 ## Tools
 import base64
-from typing import List, Optional, Callable, Any, Literal, Union
-import os
+from typing import Optional, Callable, Any, Literal, Union
 from dotenv import load_dotenv
 import asyncio
 
 from pydantic import BaseModel
-
-from langchain.agents import Tool
-from langchain_community.utilities import GoogleSearchAPIWrapper
 
 # from models.tools import apify
 from models.tools.prompt_template import PromptTemplate
@@ -101,17 +97,6 @@ class Guide:
         self.planner = StepwisePlanner(self.guide)
         print("Planner created")
 
-    def _setup_tools(self) -> List[Tool]:
-        # Define which tools the agent can use to answer user queries
-        print("Setting up tools")
-        tools = []
-        # if os.environ.get('APIFY_API_TOKEN'):
-        #     self.apify = apify.ApifyTool()
-        #     tools.append(Tool(name='Scrape', func=self.apify.scrape_website, description="use when you need to scrape a website, provide the url as action input"))
-        #     tools.append(Tool(name='Lookup', func=self.apify.query, description="use when you need to check if you already know something, provide the query as action input"))
-        print(f"Tools: {[tool.name for tool in tools]}")
-        return tools
-    
     async def _plan(self, goal: str, callback: Callable[[str], None], history_context: str, history: str, session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False) -> Message:
         try:
             plan = self.planner.create_plan(goal=goal)
