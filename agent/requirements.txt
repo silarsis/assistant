@@ -9,12 +9,10 @@ langchain-openai
 openai
 google-api-python-client
 wolframalpha
-# transformers[agents]
 sentence-transformers
 bs4
 certifi
 apify-client
-google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
 fastapi
@@ -27,3 +25,5 @@ gradio
 torchaudio
 pydantic
 pydantic-settings
+pyaudio
+elevenlabs
