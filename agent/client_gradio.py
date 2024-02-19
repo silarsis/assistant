@@ -18,11 +18,13 @@ from openai import OpenAI
 
 from models.guide import Guide, DEFAULT_SESSION_ID
 
-from transformers import pipeline
+try:
+    from transformers import pipeline
+except ImportError:
+    pipeline = None
 
 from pydantic import BaseModel
-from pydantic_settings import BaseSettings
-from pydantic.types import Any, List, Union
+from pydantic.types import Any, Union
 import numpy as np
 from numpy.typing import ArrayLike
 
@@ -35,7 +37,8 @@ from config import settings
 #         with st.chat_message("assistant"):
 #             st.markdown(response.mesg)
 
-transcriber = pipeline("automatic-speech-recognition", model="openai/whisper-base.en")
+if pipeline:
+    transcriber = pipeline("automatic-speech-recognition", model="openai/whisper-base.en")
 
 @functools.lru_cache()
 def elevenlabs_voices():
@@ -70,6 +73,9 @@ class Agent(BaseModel):
         return self.session_id
         
     async def process_audio(self, audio_state, audio_data: tuple[int, ArrayLike]):
+        if not transcriber:
+            print("No transcriber available, skipping audio processing")
+            return [None, '']
         sample_rate, audio = audio_data
         if not audio.any():
             return [audio_state, '']
@@ -204,14 +210,15 @@ class Agent(BaseModel):
         response = self._agent.update_google_docs_token(self._google_credentials)
         return response.mesg
     
-    def update_api_keys(self, api_type: str, api_key: str, api_base: str, deployment_name: str) -> str:
+    def update_api_keys(self, api_type: str, api_key: str, api_base: str, deployment_name: str, org_id: str) -> str:
         settings.openai_api_type = api_type
         settings.openai_api_key = api_key
-        settings.openai_api_base = api_base
+        settings.openai_api_base = api_base or None
         settings.openai_deployment_name = deployment_name
+        settings.openai_org_id = org_id or None
         self._connect(character=self._character)
         settings.save()
-        return [api_type, api_key, api_base, deployment_name]
+        return [api_type, api_key, api_base, deployment_name, org_id]
     
     def update_img_api_keys(self, api_type: str, api_key: str, api_base: str) -> str:
         settings.img_openai_api_type = api_type
@@ -219,6 +226,10 @@ class Agent(BaseModel):
         settings.img_openai_api_base = api_base
         settings.save()
         return [api_type, api_key, api_base]
+    
+    def update_img_inherit(self, inherit: bool):
+        settings.img_openai_inherit = inherit
+        settings.save()
     
     def el_up_api_key(self, api_key: str):
         # Update ElevenLabs API key
@@ -241,66 +252,71 @@ class Agent(BaseModel):
 agent = Agent()
 
 with gr.Blocks() as demo:
-    with gr.Accordion("Settings", open=False):
-        with gr.Row():
-            with gr.Column(scale=4):
-                google_login_button = gr.Button("Google Login")
-                google_login_button.click(agent.google_login, [google_login_button], [google_login_button])
-            with gr.Column(scale=1):
-                sesid = gr.Textbox(label="Session ID", value=DEFAULT_SESSION_ID)
-                sesid.change(agent.update_session_id, [sesid], [sesid])
-                
-        speech_engine = gr.Dropdown(["None", "ElevenLabs", "OpenAI", "TTS"], label="Speech Engine", value=settings.voice, interactive=True)
-        speech_engine.input(agent.set_speech_engine, [speech_engine], [speech_engine])
-        with gr.Accordion("ElevenLabs", open=False):
+    with gr.Row():
+        with gr.Column(scale=2):
+            with gr.Accordion("Settings", open=True):
+                with gr.Row():
+                    with gr.Column(scale=4):
+                        google_login_button = gr.Button("Google Login")
+                        google_login_button.click(agent.google_login, [google_login_button], [google_login_button])
+                    with gr.Column(scale=1):
+                        sesid = gr.Textbox(label="Session ID", value=DEFAULT_SESSION_ID)
+                        sesid.change(agent.update_session_id, [sesid], [sesid])
+                speech_engine = gr.Dropdown(["None", "ElevenLabs", "OpenAI", "TTS"], label="Speech Engine", value=settings.voice, interactive=True)
+                speech_engine.input(agent.set_speech_engine, [speech_engine], [speech_engine])
+                with gr.Accordion("ElevenLabs", open=False):
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            el_api_key = gr.Textbox(label="API Key", value=settings.elevenlabs_api_key, type="password")
+                            el_api_key.input(agent.el_up_api_key, [el_api_key])
+                        with gr.Column(scale=1):
+                            el_voice1 = gr.Dropdown(elevenlabs_voices(), label="Voice", value=settings.elevenlabs_voice_1_id, interactive=True)
+                            el_voice1.select(agent.el_up_voice1, [el_voice1])
+                with gr.Accordion("Main LLM Keys", open=False):
+                    api_config = [
+                        gr.Dropdown(["openai", "azure"], label="API Type", value=settings.openai_api_type, interactive=True),
+                        gr.Textbox(label="API Key", value=settings.openai_api_key, type="password"),
+                        gr.Textbox(label="API Base URI", value=settings.openai_api_base, type="text"),
+                        gr.Textbox(label="Deployment Name", value=settings.openai_deployment_name, type="text"),
+                        gr.Textbox(label="Org ID", value=settings.openai_org_id, type="text"),
+                    ]
+                    api_update_button = gr.Button("Update")
+                    api_update_button.click(agent.update_api_keys, api_config, api_config)
+                with gr.Accordion("Image Generation Keys", open=False):
+                    inherit = gr.Checkbox(label="Inherit from Main LLM", value=settings.img_openai_inherit, interactive=True)
+                    api_config = [
+                        gr.Dropdown(["openai", "azure"], label="API Type", value=settings.img_openai_api_type, interactive=not settings.img_openai_inherit),
+                        gr.Textbox(label="API Key", value=settings.img_openai_api_key, type="password", interactive=not settings.img_openai_inherit),
+                        gr.Textbox(label="API Base URI", value=settings.img_openai_api_base, type="text", interactive=not settings.img_openai_inherit),
+                    ]
+                    api_update_button = gr.Button("Update", interactive=not settings.img_openai_inherit)
+                    api_update_button.click(agent.update_img_api_keys, api_config, api_config)
+                    inherit.change(agent.update_img_inherit, [inherit])
+                with gr.Accordion("Character (does not persist yet)", open=False):
+                    char = gr.Textbox(agent._character, show_copy_button=True, lines=5)
+                    char_btn = gr.Button("Update")
+                    char_btn.click(agent.update_character, [char], [char])
             with gr.Row():
-                with gr.Column(scale=1):
-                    el_api_key = gr.Textbox(label="API Key", value=settings.elevenlabs_api_key, type="password")
-                    el_api_key.input(agent.el_up_api_key, [el_api_key])
-                with gr.Column(scale=1):
-                    el_voice1 = gr.Dropdown(elevenlabs_voices(), label="Voice 1", value=settings.elevenlabs_voice_1_id, interactive=True)
-                    el_voice1.select(agent.el_up_voice1, [el_voice1])
-        with gr.Accordion("Main LLM Keys", open=False):
-            api_config = [
-                gr.Dropdown(["openai", "azure"], label="API Type", value=settings.openai_api_type, interactive=True),
-                gr.Textbox(label="API Key", value=settings.openai_api_key, type="password"),
-                gr.Textbox(label="API Base URI", value=settings.openai_api_base, type="text"),
-                gr.Textbox(label="Deployment Name", value=settings.openai_deployment_name, type="text"),
-            ]
-            api_update_button = gr.Button("Update")
-            api_update_button.click(agent.update_api_keys, api_config, api_config)
-        with gr.Accordion("Image Generation Keys", open=False):
-            api_config = [
-                gr.Dropdown(["openai", "azure"], label="API Type", value=settings.img_openai_api_type, interactive=True),
-                gr.Textbox(label="API Key", value=settings.img_openai_api_key, type="password"),
-                gr.Textbox(label="API Base URI", value=settings.img_openai_api_base, type="text"),
-            ]
-            api_update_button = gr.Button("Update")
-            api_update_button.click(agent.update_img_api_keys, api_config, api_config)
-        with gr.Accordion("Character (does not persist yet)", open=False):
-            char = gr.Textbox(agent._character, show_copy_button=True, lines=5)
-            char_btn = gr.Button("Update")
-            char_btn.click(agent.update_character, [char], [char])
-    with gr.Row():
-        wav_speaker = gr.Audio(interactive=False, streaming=True, visible=False, format='wav', autoplay=True)
-        mp3_speaker = gr.Audio(interactive=False, visible=False, format='mp3', autoplay=True)
-    chatbot = gr.Chatbot(agent.get_history_for_chatbot, bubble_full_width=False)
-    with gr.Row():
-        txt = gr.Textbox(
-            scale=4,
-            show_label=False,
-            placeholder="Enter text and press enter",
-            container=False,
-        )
-        txt.submit(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
-        btn = gr.UploadButton("📁", type="filepath")
-        btn.upload(agent.process_file_input, [btn, chatbot], [chatbot, wav_speaker, mp3_speaker])
-    with gr.Row():
-        audio_state = gr.State()
-        audio = gr.Audio(sources="microphone", streaming=True, autoplay=True)
-        audio.stream(agent.process_audio, [audio_state, audio], [audio_state, txt])
-        audio.start_recording(lambda x:None, [audio_state], [audio_state]) # This wipes the audio_state at the start of listening
-        audio.stop_recording(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
+                wav_speaker = gr.Audio(interactive=False, streaming=True, visible=False, format='wav', autoplay=True)
+                mp3_speaker = gr.Audio(interactive=False, visible=False, format='mp3', autoplay=True)
+        with gr.Column(scale=8):
+            chatbot = gr.Chatbot(agent.get_history_for_chatbot, bubble_full_width=False)
+            with gr.Row():
+                txt = gr.Textbox(
+                    scale=4,
+                    show_label=False,
+                    placeholder="Enter text and press enter",
+                    container=False,
+                )
+                txt.submit(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
+                btn = gr.UploadButton("📁", type="filepath")
+                btn.upload(agent.process_file_input, [btn, chatbot], [chatbot, wav_speaker, mp3_speaker])
+            with gr.Row():
+                audio_state = gr.State()
+                audio = gr.Audio(sources="microphone", streaming=True, autoplay=True)
+                audio.stream(agent.process_audio, [audio_state, audio], [audio_state, txt])
+                audio.start_recording(lambda x:None, [audio_state], [audio_state]) # This wipes the audio_state at the start of listening
+                audio.stop_recording(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
 
 demo.queue()
 if __name__ == '__main__':

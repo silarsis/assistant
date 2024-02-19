@@ -43,7 +43,7 @@ class DocStore(BaseModel):
             else:
                 break
             
-    def _vector_store(self, collection_name: str = 'LangChainCollection'):
+    def _vector_store(self, collection_name: str = 'AssistantCollection'):
         cache_key = self._cache_key(collection_name)
         if cache_key not in self._vector_stores:
             self._vector_stores[cache_key] = self._chroma_client.create_collection(
@@ -60,5 +60,5 @@ class DocStore(BaseModel):
         if not self._already_loaded(docid):
             self._vector_store(docid).add(documents=elements, ids=[f'{docid}_{i}' for i in range(len(elements))])
             
-    def query(self, query: str, collection_name: str = 'LangChainCollection'):
+    def query(self, query: str, collection_name: str = 'AssistantCollection'):
         return self._vector_store(collection_name).query(query)

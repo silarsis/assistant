@@ -70,11 +70,18 @@ class CustomHTTPTransport(httpx.HTTPTransport):
         return super().handle_request(request)
 
 class ImageGenerationPlugin(BaseModel):
-    api_key: str = settings.img_openai_api_key or settings.openai_api_key
-    base_url: str = settings.img_openai_api_base or settings.openai_api_base
-    api_version: str = settings.img_openai_api_version or settings.openai_api_version
-    api_type: str = settings.img_openai_api_type or settings.openai_api_type
-    org_id: str = settings.img_openai_org_id or settings.openai_org_id
+    if settings.img_openai_inherit:
+        api_key: str = settings.openai_api_key
+        base_url: str = settings.openai_api_base
+        api_version: str = settings.openai_api_version
+        api_type: str = settings.openai_api_type
+        org_id: str = settings.openai_org_id
+    else:
+        api_key: str = settings.img_openai_api_key
+        base_url: str = settings.img_openai_api_base
+        api_version: str = settings.img_openai_api_version
+        api_type: str = settings.img_openai_api_type
+        org_id: str = settings.img_openai_org_id
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
