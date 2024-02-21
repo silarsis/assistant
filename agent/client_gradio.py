@@ -238,10 +238,6 @@ class Agent(BaseModel):
             gr.Textbox(label="API Base URI", value=settings.img_openai_api_base, type="text", visible=(settings.img_openai_inherit == False))
         ]
     
-    def update_img_inherit(self, inherit: bool):
-        settings.img_openai_inherit = inherit
-        settings.save()
-    
     def update_character(self, character: str) -> str:
         self._character = character
         self._connect(character=character)
