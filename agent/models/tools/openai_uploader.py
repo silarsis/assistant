@@ -11,7 +11,7 @@ def upload_image(image_path):
 
     headers = {
     "Content-Type": "application/json",
-    "Authorization": f"Bearer {settings.openai_api_key}"
+    "Authorization": f"Bearer {settings.img_upload_api_key or settings.openai_api_key}"
     }
 
     payload = {
@@ -38,5 +38,8 @@ def upload_image(image_path):
 
     # This should be async
     response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-
-    return response.json()
+    try:
+        return response.json()['choices'][0]['message']
+    except (IndexError, KeyError) as e:
+        print(f"Error uploading image: {e}")
+        return response

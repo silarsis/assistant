@@ -161,11 +161,19 @@ Response 2: {response2}
         if not filename:
             await callback(Response(mesg="No file name was provided. Please provide file data to prompt on.", final=True))
             return
+        history = self.memory.get_formatted_history(session_id=session_id)
+        history_context = self.memory.get_context(session_id=session_id)
         response = upload_image(filename)
         if 'error' in response:
-            await callback(Response(mesg=f"There was an error uploading the file: {response['error']['message']}", final=True))
+            final_response = await self.rephrase("describe this image", Thought(mesg=response['error']['message']), history, history_context, session_id=session_id)
+            await callback(Response(mesg=final_response.mesg), final=True)
             return
-        return await self.prompt_with_callback(response, callback, session_id=session_id, hear_thoughts=hear_thoughts)
+        final_response = await self.rephrase("describe this image", Thought(mesg=response['content']), history, history_context, session_id=session_id)
+        await asyncio.gather(
+            self.memory.add_message(role="AI", content=f"Response: {final_response.mesg}\n", session_id=session_id),
+            callback(final_response)
+        )
+        return None
     
     async def prompt_with_callback(self, prompt: Union[str,bytes], callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> Message:
         if not prompt:
