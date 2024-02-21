@@ -42,3 +42,19 @@ Other projects that have been an inspiration include:
   * https://github.com/randaller/llama-chat
   * https://open-assistant.io/
 
+** Prompting for a task I want the agent to be able to do:
+
+Given a document to analyse, you should do the following steps:
+
+* Load the document into your document store
+* Search the document for primary subject matter
+* Search your memory for the same subject matter
+* Search the web for websites pertaining to this subject matter
+* Save websites that talk about this subject matter
+* Based on what you've learnt from the websites and your memory, provide an analysis of the initial document.
+
+You have the following tools to help you do this:
+
+* DocStore to load the document, or the Google doc loader for google docs
+* web scraper for websites
+* memory to store scraped websites and the document itself
