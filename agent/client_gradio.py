@@ -6,6 +6,9 @@ import asyncio
 import time
 import re
 import functools
+from io import StringIO
+from markdown import Markdown
+from models.tools.clean_markdown import convert_to_plain_text
 
 from urllib.parse import quote
 
@@ -44,9 +47,20 @@ if pipeline:
 def elevenlabs_voices():
     return [[voice.name, voice.voice_id] for voice in elevenlabs.voices()]
 
-def grGet(block: Any, key: str) -> Any:
-    # Takes a gr.Block and a key, searches children to find the labelled child
-    return [child for child in block.children if hasattr(child, 'label') and child.label == key][0]
+# From https://stackoverflow.com/questions/761824/python-how-to-convert-markdown-formatted-text-to-text,
+# code to turn markdown into plain text so it can be read nicely
+def unmark_element(element, stream=None):
+    if stream is None:
+        stream = StringIO()
+    if element.text:
+        stream.write(element.text)
+    for sub in element:
+        unmark_element(sub, stream)
+    if element.tail:
+        stream.write(element.tail)
+    return stream.getvalue()
+Markdown.output_formats["plain"] = unmark_element
+
 
 class Agent(BaseModel):
     _character: str = ""
@@ -100,7 +114,7 @@ class Agent(BaseModel):
         return [audio_state, text]
     
     async def process_file_input(self, filename: str, history: list[list[str, str]], *args, **kwargs):
-        history.append([f"[{filename}](Uploaded file)", "Thinking..."])
+        history.append((filename, "Thinking..."))
         yield([history, None, None])
         recvQ = asyncio.Queue()
         async with asyncio.TaskGroup() as tg:
@@ -138,17 +152,18 @@ class Agent(BaseModel):
     def _clean_text_for_speech(self, text: str) -> str:
         # Clean up the text for speech
         # First, remove any markdown images
-        md_img = re.compile(r'!\[.*\]\((.*)\)')
-        text = md_img.sub('', text)
+        cleaned = convert_to_plain_text(text)
+        # md_img = re.compile(r'!\[.*\]\((.*)\)')
+        # text = md_img.sub('', text)
         # Now remove any code blocks
         code_block = re.compile(r'```(?:.|\n)*?```')
-        text = code_block.sub('', text)
+        cleaned = code_block.sub("(I try not to read code aloud, but check the screen)", cleaned)
         return text
         
     def speak(self, payload: str = ''):
         payload = self._clean_text_for_speech(payload)
         if settings.voice == 'None':
-            print("No speech engine")
+            print("No TTS")
             return (None, None)
         if settings.voice == 'ElevenLabs':
             print("Elevenlabs TTS")
@@ -167,7 +182,7 @@ class Agent(BaseModel):
                 print(f"Speech error, not speaking: {e}")
                 return (None, None)
         else:
-            print(f"Unknown speech engine {settings.voice}")
+            print(f"Unknown TTS {settings.voice}")
             return (None, None)
             
     def tts_get_stream(self, text: str) -> bytes:
@@ -268,7 +283,7 @@ class Agent(BaseModel):
 
 agent = Agent()
 
-with gr.Blocks() as demo:
+with gr.Blocks(fill_height=True) as demo:
     agent.settings_block = demo
     with gr.Row():
         with gr.Column(scale=2):
@@ -324,7 +339,7 @@ with gr.Blocks() as demo:
                 wav_speaker = gr.Audio(interactive=False, streaming=True, visible=False, format='wav', autoplay=True)
                 mp3_speaker = gr.Audio(interactive=False, visible=False, format='mp3', autoplay=True)
         with gr.Column(scale=8):
-            chatbot = gr.Chatbot(agent.get_history_for_chatbot, bubble_full_width=False)
+            chatbot = gr.Chatbot(agent.get_history_for_chatbot, bubble_full_width=False, show_copy_button=True)
             with gr.Row():
                 txt = gr.Textbox(
                     scale=4,
