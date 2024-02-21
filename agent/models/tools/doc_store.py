@@ -1,4 +1,3 @@
-import os
 import time
 
 from pydantic import BaseModel
@@ -59,6 +58,12 @@ class DocStore(BaseModel):
     def load_doc(self, docid: str, elements: list[str]):
         if not self._already_loaded(docid):
             self._vector_store(docid).add(documents=elements, ids=[f'{docid}_{i}' for i in range(len(elements))])
+            
+    def upload(self, doc: str):
+        """ Takes an entire document as a string, breaks it into elements and calls load_doc """
+        # Basic until we have a proper parser
+        elements = doc.split("\n")
+        self.load_doc(hash(doc), elements)
             
     def query(self, query: str, collection_name: str = 'AssistantCollection'):
         return self._vector_store(collection_name).query(query)

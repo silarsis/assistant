@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from models.tools.prompt_template import PromptTemplate
 from models.tools.memory import Memory
 from models.tools.openai_uploader import upload_image
+from models.tools.doc_store import DocStore
 
 # New semantic kernel setup
 import semantic_kernel as sk
@@ -199,6 +200,7 @@ Response 2: {response2}
 
     async def upload_file_with_callback(self, file_data: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> None:
         file = base64.b64decode(file_data)
+        document_store = DocStore()
         document_store.upload(file)
         await callback(Response("Document Uploaded"))
 
