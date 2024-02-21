@@ -143,12 +143,12 @@ Answer:
         # Ask the guide which is the better response
         prompt_template = f"""
 You have been tasked with answering the following: {prompt}.
-Select the response that has the most information in it from the following two responses and indicate your selection by sending either 'response 1' or 'response 2':
+Select the most informative response from the following two responses and indicate your selection by sending either 'response 1' or 'response 2':
 Response 1: {response1}
 Response 2: {response2}
         """
         query = self.guide.create_semantic_function(
-            prompt_template=f"You have been tasked with answering the following: {prompt}\nSelect the most informative response from the following two responses and indicate your selection by sending either 'response 1' or 'response 2':\n\nResponse 1:\n{response1}\n\nResponse 2:\n\n{response2}\n", 
+            prompt_template=prompt_template,
             max_tokens=2000, temperature=0.2, top_p=0.5)
         result = await query.invoke()
         print(result)
