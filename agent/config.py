@@ -1,6 +1,8 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
 from pydantic.fields import FieldInfo
+from pydantic import computed_field
 from pathlib import Path
+import keyring
 
 from typing import Optional, Literal, Tuple, Any, Dict, Type
 
@@ -100,6 +102,17 @@ class AppSettings(BaseSettings):
     google_cse_id: Optional[str] = None
     # Apify for scraping websites
     apify_api_key: Optional[str] = None
+    # PyHive / Presto for internal data access
+    presto_host: str = ""
+    presto_username: str = ""
+    
+    @computed_field(repr=False)
+    def presto_password(self) -> str:
+        return keyring.get_password("ai", "presto_password") or ""
+    
+    @presto_password.setter
+    def presto_password(self, value: str) -> None:
+        keyring.set_password("ai", "presto_password", value)
     
     @classmethod
     def settings_customise_sources(
@@ -120,6 +133,6 @@ class AppSettings(BaseSettings):
 
     def save(self):
         with open('.env.json', 'w') as f:
-            f.write(json.dumps(self.model_dump(mode='json')))
+            f.write(json.dumps(self.model_dump(mode='json', exclude=['presto_password'])))
     
 settings = AppSettings()

@@ -280,6 +280,12 @@ class Agent(BaseModel):
             gr.Textbox(label="TTS Host", value=settings.tts_host, visible=(settings.voice == 'TTS')),
             gr.Textbox(label="TTS Port", value=settings.tts_port, visible=(settings.voice == 'TTS'))
         ]
+        
+    def update_presto_settings(self, presto_host: str, presto_username: str, presto_password: str) -> None:
+        settings.presto_host = presto_host
+        settings.presto_username = presto_username
+        settings.presto_password = presto_password
+        settings.save()
 
 agent = Agent()
 
@@ -335,6 +341,14 @@ with gr.Blocks(fill_height=True) as demo:
                     char = gr.Textbox(agent._character, show_copy_button=True, lines=5)
                     char_btn = gr.Button("Update")
                     char_btn.click(agent.update_character, [char], [char])
+                with gr.Accordion("Presto", open=False):
+                    presto_config = [
+                        gr.Textbox(label="Presto Hostname", value=settings.presto_host),
+                        gr.Textbox(label="Presto Username", value=settings.presto_username),
+                        gr.Textbox(label="Presto Password", value=settings.presto_password, type="password")
+                    ]
+                    presto_button = gr.Button("Update")
+                    presto_button.click(agent.update_presto_settings, presto_config)
             with gr.Row():
                 wav_speaker = gr.Audio(interactive=False, streaming=True, visible=False, format='wav', autoplay=True)
                 mp3_speaker = gr.Audio(interactive=False, visible=False, format='mp3', autoplay=True)
