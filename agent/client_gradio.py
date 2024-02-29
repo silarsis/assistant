@@ -6,6 +6,9 @@ import asyncio
 import time
 import re
 import functools
+from io import StringIO
+from markdown import Markdown
+from models.tools.clean_markdown import convert_to_plain_text
 
 from urllib.parse import quote
 
@@ -24,7 +27,7 @@ except ImportError:
     pipeline = None
 
 from pydantic import BaseModel
-from pydantic.types import Any, Union
+from pydantic.types import Any, Union, List
 import numpy as np
 from numpy.typing import ArrayLike
 
@@ -44,6 +47,21 @@ if pipeline:
 def elevenlabs_voices():
     return [[voice.name, voice.voice_id] for voice in elevenlabs.voices()]
 
+# From https://stackoverflow.com/questions/761824/python-how-to-convert-markdown-formatted-text-to-text,
+# code to turn markdown into plain text so it can be read nicely
+def unmark_element(element, stream=None):
+    if stream is None:
+        stream = StringIO()
+    if element.text:
+        stream.write(element.text)
+    for sub in element:
+        unmark_element(sub, stream)
+    if element.tail:
+        stream.write(element.tail)
+    return stream.getvalue()
+Markdown.output_formats["plain"] = unmark_element
+
+
 class Agent(BaseModel):
     _character: str = ""
     _agent: Guide = None
@@ -51,6 +69,7 @@ class Agent(BaseModel):
     speech_engine: str = settings.voice
     _google_credentials: Any = None
     session_id: str = DEFAULT_SESSION_ID
+    settings_block: Any = None
     
     def __init__(self, **kwargs):
         super().__init__()
@@ -95,7 +114,7 @@ class Agent(BaseModel):
         return [audio_state, text]
     
     async def process_file_input(self, filename: str, history: list[list[str, str]], *args, **kwargs):
-        history.append([f"[{filename}](Uploaded file)", "Thinking..."])
+        history.append((filename, "Thinking..."))
         yield([history, None, None])
         recvQ = asyncio.Queue()
         async with asyncio.TaskGroup() as tg:
@@ -133,17 +152,18 @@ class Agent(BaseModel):
     def _clean_text_for_speech(self, text: str) -> str:
         # Clean up the text for speech
         # First, remove any markdown images
-        md_img = re.compile(r'!\[.*\]\((.*)\)')
-        text = md_img.sub('', text)
+        cleaned = convert_to_plain_text(text)
+        # md_img = re.compile(r'!\[.*\]\((.*)\)')
+        # text = md_img.sub('', text)
         # Now remove any code blocks
-        code_block = re.compile(r'```.*```')
-        text = code_block.sub('', text)
+        code_block = re.compile(r'```(?:.|\n)*?```')
+        cleaned = code_block.sub("(I try not to read code aloud, but check the screen)", cleaned)
         return text
         
     def speak(self, payload: str = ''):
         payload = self._clean_text_for_speech(payload)
         if settings.voice == 'None':
-            print("No speech engine")
+            print("No TTS")
             return (None, None)
         if settings.voice == 'ElevenLabs':
             print("Elevenlabs TTS")
@@ -162,7 +182,7 @@ class Agent(BaseModel):
                 print(f"Speech error, not speaking: {e}")
                 return (None, None)
         else:
-            print(f"Unknown speech engine {settings.voice}")
+            print(f"Unknown TTS {settings.voice}")
             return (None, None)
             
     def tts_get_stream(self, text: str) -> bytes:
@@ -220,38 +240,57 @@ class Agent(BaseModel):
         settings.save()
         return [api_type, api_key, api_base, deployment_name, org_id]
     
-    def update_img_api_keys(self, api_type: str, api_key: str, api_base: str) -> str:
+    def update_img_api_keys(self, inherit: bool, api_type: str, api_key: str, api_base: str) -> List:
+        settings.img_openai_inherit = inherit
         settings.img_openai_api_type = api_type
         settings.img_openai_api_key = api_key
         settings.img_openai_api_base = api_base
         settings.save()
-        return [api_type, api_key, api_base]
-    
-    def update_img_inherit(self, inherit: bool):
-        settings.img_openai_inherit = inherit
-        settings.save()
-    
-    def el_up_api_key(self, api_key: str):
-        # Update ElevenLabs API key
-        settings.elevenlabs_api_key = api_key
-        settings.save()
-        
-    def el_up_voice1(self, voice1_id: str):
-        # Update ElevenLabs voice 1 ID
-        settings.elevenlabs_voice_1_id = voice1_id
-        settings.save()
+        return [
+            gr.Checkbox(label="Inherit from Main LLM", value=settings.img_openai_inherit, interactive=True),
+            gr.Dropdown(["openai", "azure"], label="API Type", value=settings.img_openai_api_type, visible=(settings.img_openai_inherit == False)),
+            gr.Textbox(label="API Key", value=settings.img_openai_api_key, type="password", visible=(settings.img_openai_inherit == False)),
+            gr.Textbox(label="API Base URI", value=settings.img_openai_api_base, type="text", visible=(settings.img_openai_inherit == False))
+        ]
     
     def update_character(self, character: str) -> str:
         self._character = character
         self._connect(character=character)
         return character
     
+    def update_img_api_key(self, api_key: str) -> str:
+        settings.img_upload_api_key = api_key
+        settings.save()
+    
     def get_history_for_chatbot(self):
         return self._agent.memory.get_history_for_chatbot(self.session_id)
+    
+    def update_voice_settings(self, speech_engine, el_api_key, el_voice1, tts_host, tts_port) -> List:
+        settings.voice = speech_engine
+        if speech_engine == 'ElevenLabs':
+            settings.elevenlabs_api_key = el_api_key
+            settings.elevenlabs_voice_1_id = el_voice1
+        if speech_engine == 'TTS':
+            settings.tts_host = tts_host
+            settings.tts_port = tts_port
+        settings.save()
+        return [
+            gr.Textbox(label="ElevenLabs API Key", value=settings.elevenlabs_api_key, type="password", visible=(settings.voice == 'ElevenLabs')),
+            gr.Dropdown(elevenlabs_voices(), label="ElevenLabs Voice", value=settings.elevenlabs_voice_1_id, interactive=True, visible=(settings.voice == 'ElevenLabs')),
+            gr.Textbox(label="TTS Host", value=settings.tts_host, visible=(settings.voice == 'TTS')),
+            gr.Textbox(label="TTS Port", value=settings.tts_port, visible=(settings.voice == 'TTS'))
+        ]
+        
+    def update_presto_settings(self, presto_host: str, presto_username: str, presto_password: str) -> None:
+        settings.presto_host = presto_host
+        settings.presto_username = presto_username
+        settings.presto_password = presto_password
+        settings.save()
 
 agent = Agent()
 
-with gr.Blocks() as demo:
+with gr.Blocks(fill_height=True) as demo:
+    agent.settings_block = demo
     with gr.Row():
         with gr.Column(scale=2):
             with gr.Accordion("Settings", open=True):
@@ -262,16 +301,19 @@ with gr.Blocks() as demo:
                     with gr.Column(scale=1):
                         sesid = gr.Textbox(label="Session ID", value=DEFAULT_SESSION_ID)
                         sesid.change(agent.update_session_id, [sesid], [sesid])
-                speech_engine = gr.Dropdown(["None", "ElevenLabs", "OpenAI", "TTS"], label="Speech Engine", value=settings.voice, interactive=True)
-                speech_engine.input(agent.set_speech_engine, [speech_engine], [speech_engine])
-                with gr.Accordion("ElevenLabs", open=False):
+                with gr.Accordion("Speech", open=False):
+                    speech_engine = gr.Dropdown(["None", "ElevenLabs", "OpenAI", "TTS"], label="Speech Engine", value=settings.voice, interactive=True)
                     with gr.Row():
-                        with gr.Column(scale=1):
-                            el_api_key = gr.Textbox(label="API Key", value=settings.elevenlabs_api_key, type="password")
-                            el_api_key.input(agent.el_up_api_key, [el_api_key])
-                        with gr.Column(scale=1):
-                            el_voice1 = gr.Dropdown(elevenlabs_voices(), label="Voice", value=settings.elevenlabs_voice_1_id, interactive=True)
-                            el_voice1.select(agent.el_up_voice1, [el_voice1])
+                        with gr.Row():
+                            el_api_key = gr.Textbox(label="ElevenLabs API Key", value=settings.elevenlabs_api_key, type="password", visible=(settings.voice == 'ElevenLabs'))
+                            tts_host = gr.Textbox(label="TTS Host", value=settings.tts_host, visible=(settings.voice == 'TTS'))
+                        with gr.Row():
+                            el_voice1 = gr.Dropdown(elevenlabs_voices(), label="ElevenLabs Voice", value=settings.elevenlabs_voice_1_id, interactive=True, visible=(settings.voice == 'ElevenLabs'))
+                            tts_port = gr.Textbox(label="TTS Port", value=settings.tts_port, visible=(settings.voice == 'TTS'))
+                        with gr.Row():
+                            voice_params_submit = gr.Button("Update")
+                            speech_engine.change(agent.update_voice_settings, [speech_engine, el_api_key, el_voice1, tts_host, tts_port], [el_api_key, el_voice1, tts_host, tts_port])
+                            voice_params_submit.click(agent.update_voice_settings, [speech_engine, el_api_key, el_voice1, tts_host, tts_port], [el_api_key, el_voice1, tts_host, tts_port])
                 with gr.Accordion("Main LLM Keys", open=False):
                     api_config = [
                         gr.Dropdown(["openai", "azure"], label="API Type", value=settings.openai_api_type, interactive=True),
@@ -283,24 +325,35 @@ with gr.Blocks() as demo:
                     api_update_button = gr.Button("Update")
                     api_update_button.click(agent.update_api_keys, api_config, api_config)
                 with gr.Accordion("Image Generation Keys", open=False):
-                    inherit = gr.Checkbox(label="Inherit from Main LLM", value=settings.img_openai_inherit, interactive=True)
                     api_config = [
-                        gr.Dropdown(["openai", "azure"], label="API Type", value=settings.img_openai_api_type, interactive=not settings.img_openai_inherit),
-                        gr.Textbox(label="API Key", value=settings.img_openai_api_key, type="password", interactive=not settings.img_openai_inherit),
-                        gr.Textbox(label="API Base URI", value=settings.img_openai_api_base, type="text", interactive=not settings.img_openai_inherit),
+                        gr.Checkbox(label="Inherit from Main LLM", value=settings.img_openai_inherit, interactive=True),
+                        gr.Dropdown(["openai", "azure"], label="API Type", value=settings.img_openai_api_type, visible=(settings.img_openai_inherit == False)),
+                        gr.Textbox(label="API Key", value=settings.img_openai_api_key, type="password", visible=(settings.img_openai_inherit == False)),
+                        gr.Textbox(label="API Base URI", value=settings.img_openai_api_base, type="text", visible=(settings.img_openai_inherit == False))
                     ]
-                    api_update_button = gr.Button("Update", interactive=not settings.img_openai_inherit)
+                    api_update_button = gr.Button("Update")
                     api_update_button.click(agent.update_img_api_keys, api_config, api_config)
-                    inherit.change(agent.update_img_inherit, [inherit])
+                    api_config[0].change(agent.update_img_api_keys, api_config, api_config)
+                with gr.Accordion("Image Upload Keys", open=False):
+                    api_key = gr.Textbox(label="Image API Key", value=settings.img_upload_api_key, type="password")
+                    api_key.input(agent.update_img_api_key, [api_key])
                 with gr.Accordion("Character (does not persist yet)", open=False):
                     char = gr.Textbox(agent._character, show_copy_button=True, lines=5)
                     char_btn = gr.Button("Update")
                     char_btn.click(agent.update_character, [char], [char])
+                with gr.Accordion("Presto", open=False):
+                    presto_config = [
+                        gr.Textbox(label="Presto Hostname", value=settings.presto_host),
+                        gr.Textbox(label="Presto Username", value=settings.presto_username),
+                        gr.Textbox(label="Presto Password", value=settings.presto_password, type="password")
+                    ]
+                    presto_button = gr.Button("Update")
+                    presto_button.click(agent.update_presto_settings, presto_config)
             with gr.Row():
                 wav_speaker = gr.Audio(interactive=False, streaming=True, visible=False, format='wav', autoplay=True)
                 mp3_speaker = gr.Audio(interactive=False, visible=False, format='mp3', autoplay=True)
         with gr.Column(scale=8):
-            chatbot = gr.Chatbot(agent.get_history_for_chatbot, bubble_full_width=False)
+            chatbot = gr.Chatbot(agent.get_history_for_chatbot, bubble_full_width=False, show_copy_button=True)
             with gr.Row():
                 txt = gr.Textbox(
                     scale=4,

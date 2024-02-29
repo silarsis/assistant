@@ -27,3 +27,5 @@ pydantic
 pydantic-settings
 pyaudio
 elevenlabs
+keychain
+pyhive[presto]
