@@ -118,7 +118,10 @@ class Agent(BaseModel):
         yield([history, None, None])
         recvQ = asyncio.Queue()
         async with asyncio.TaskGroup() as tg:
-            prompt_task = tg.create_task(self._agent.prompt_file_with_callback(filename, callback=recvQ.put, session_id=self.session_id, hear_thoughts=False), name="prompt")
+            # Assigned to a variable to keep it in scope so the task doesn't get deleted too early
+            prompt_task = tg.create_task(
+                self._agent.prompt_file_with_callback(
+                    filename, callback=recvQ.put, session_id=self.session_id, hear_thoughts=False), name="prompt")
             history[-1][1] = ''
             while response := await recvQ.get():
                 history[-1][1] += response.mesg
@@ -131,7 +134,10 @@ class Agent(BaseModel):
         yield(["", history, None, None])
         recvQ = asyncio.Queue()
         async with asyncio.TaskGroup() as tg:
-            prompt_task = tg.create_task(self._agent.prompt_with_callback(input, callback=recvQ.put, session_id=self.session_id, hear_thoughts=False), name="prompt")
+            # Assigned to a variable to keep it in scope so the task doesn't get deleted too early
+            prompt_task = tg.create_task(
+                self._agent.prompt_with_callback(
+                    input, callback=recvQ.put, session_id=self.session_id, hear_thoughts=False), name="prompt")
             history[-1][1] = ''
             while response := await recvQ.get():
                 history[-1][1] += response.mesg
@@ -248,9 +254,9 @@ class Agent(BaseModel):
         settings.save()
         return [
             gr.Checkbox(label="Inherit from Main LLM", value=settings.img_openai_inherit, interactive=True),
-            gr.Dropdown(["openai", "azure"], label="API Type", value=settings.img_openai_api_type, visible=(settings.img_openai_inherit == False)),
-            gr.Textbox(label="API Key", value=settings.img_openai_api_key, type="password", visible=(settings.img_openai_inherit == False)),
-            gr.Textbox(label="API Base URI", value=settings.img_openai_api_base, type="text", visible=(settings.img_openai_inherit == False))
+            gr.Dropdown(["openai", "azure"], label="API Type", value=settings.img_openai_api_type, visible=(settings.img_openai_inherit is False)),
+            gr.Textbox(label="API Key", value=settings.img_openai_api_key, type="password", visible=(settings.img_openai_inherit is False)),
+            gr.Textbox(label="API Base URI", value=settings.img_openai_api_base, type="text", visible=(settings.img_openai_inherit is False))
         ]
     
     def update_character(self, character: str) -> str:
@@ -327,9 +333,9 @@ with gr.Blocks(fill_height=True) as demo:
                 with gr.Accordion("Image Generation Keys", open=False):
                     api_config = [
                         gr.Checkbox(label="Inherit from Main LLM", value=settings.img_openai_inherit, interactive=True),
-                        gr.Dropdown(["openai", "azure"], label="API Type", value=settings.img_openai_api_type, visible=(settings.img_openai_inherit == False)),
-                        gr.Textbox(label="API Key", value=settings.img_openai_api_key, type="password", visible=(settings.img_openai_inherit == False)),
-                        gr.Textbox(label="API Base URI", value=settings.img_openai_api_base, type="text", visible=(settings.img_openai_inherit == False))
+                        gr.Dropdown(["openai", "azure"], label="API Type", value=settings.img_openai_api_type, visible=(settings.img_openai_inherit is False)),
+                        gr.Textbox(label="API Key", value=settings.img_openai_api_key, type="password", visible=(settings.img_openai_inherit is False)),
+                        gr.Textbox(label="API Base URI", value=settings.img_openai_api_base, type="text", visible=(settings.img_openai_inherit is False))
                     ]
                     api_update_button = gr.Button("Update")
                     api_update_button.click(agent.update_img_api_keys, api_config, api_config)
