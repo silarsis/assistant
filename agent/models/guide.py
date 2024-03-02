@@ -26,6 +26,7 @@ from models.plugins.GoogleSearch import GoogleSearchPlugin
 from models.plugins.ImageGeneration import ImageGenerationPlugin
 from models.plugins.ScrapeText import ScrapeTextPlugin
 from models.plugins.CodeGeneration import CodeGenerationPlugin
+from models.plugins.CrewAI import CrewAIPlugin
 from semantic_kernel.core_plugins import FileIOPlugin, MathPlugin, TextPlugin, TimePlugin, TextMemoryPlugin
 
 from config import settings
@@ -94,6 +95,7 @@ class Guide:
         self.guide.import_plugin(ScrapeTextPlugin(), "scrape_text")
         if settings.google_api_key: # Note this relies on the env variable being set, check this
             self.guide.import_plugin(GoogleSearchPlugin(), "google_search")
+        self.guide.import_plugin(CrewAIPlugin(), "crew_ai")
         self.guide.import_plugin(CodeGenerationPlugin(kernel=self.guide), "code_generation")
         self.planner = StepwisePlanner(self.guide)
         print("Planner created")

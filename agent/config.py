@@ -1,10 +1,10 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
 from pydantic.fields import FieldInfo
-from pydantic import computed_field
+from pydantic import computed_field, BaseModel
 from pathlib import Path
 import keyring
 
-from typing import Optional, Literal, Tuple, Any, Dict, Type
+from typing import Optional, Literal, Tuple, Any, Dict, Type, List
 
 import json
 
@@ -45,6 +45,11 @@ class JsonConfigSettingsSource(PydanticBaseSettingsSource): # Taken from https:/
             print(f"Failed to load JSON, skipping: {e}")
         return d
 
+class AgentModel(BaseModel):
+    role: str
+    goal: str
+    backstory: str
+
 class AppSettings(BaseSettings):
     # Read the .env file
     model_config = SettingsConfigDict(
@@ -55,6 +60,8 @@ class AppSettings(BaseSettings):
         validate_default=True
     )
     # XXX Can I load the contents of the character file here as a variable?
+    # XXX Also the agents, now we have CrewAI onboard
+    crew: List[AgentModel] = []
     
     # OpenAI/Azure API key and configuration
     openai_api_type: Literal["openai", "azure"] = "openai"

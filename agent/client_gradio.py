@@ -31,7 +31,7 @@ from pydantic.types import Any, Union, List
 import numpy as np
 from numpy.typing import ArrayLike
 
-from config import settings
+from config import settings, AgentModel
 
 # def google_logout():
 #     if "_credentials" in st.session_state:
@@ -292,6 +292,14 @@ class Agent(BaseModel):
         settings.presto_username = presto_username
         settings.presto_password = presto_password
         settings.save()
+        
+    def update_crew_settings(self, crew_num, role: str, goal: str, backstory: str) -> None:
+        crew = AgentModel(role=role, goal=goal, backstory=backstory)
+        if crew_num > len(settings.crew):
+            settings.crew.append(crew)
+        else:
+            settings.crew[crew_num] = crew
+        settings.save()
 
 agent = Agent()
 
@@ -299,6 +307,7 @@ with gr.Blocks(fill_height=True) as demo:
     agent.settings_block = demo
     with gr.Row():
         with gr.Column(scale=2):
+        # with gr.Tab('Settings'):
             with gr.Accordion("Settings", open=True):
                 with gr.Row():
                     with gr.Column(scale=4):
@@ -359,23 +368,38 @@ with gr.Blocks(fill_height=True) as demo:
                 wav_speaker = gr.Audio(interactive=False, streaming=True, visible=False, format='wav', autoplay=True)
                 mp3_speaker = gr.Audio(interactive=False, visible=False, format='mp3', autoplay=True)
         with gr.Column(scale=8):
-            chatbot = gr.Chatbot(agent.get_history_for_chatbot, bubble_full_width=False, show_copy_button=True)
-            with gr.Row():
-                txt = gr.Textbox(
-                    scale=4,
-                    show_label=False,
-                    placeholder="Enter text and press enter",
-                    container=False,
-                )
-                txt.submit(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
-                btn = gr.UploadButton("📁", type="filepath")
-                btn.upload(agent.process_file_input, [btn, chatbot], [chatbot, wav_speaker, mp3_speaker])
-            with gr.Row():
-                audio_state = gr.State()
-                audio = gr.Audio(sources="microphone", streaming=True, autoplay=True)
-                audio.stream(agent.process_audio, [audio_state, audio], [audio_state, txt])
-                audio.start_recording(lambda x:None, [audio_state], [audio_state]) # This wipes the audio_state at the start of listening
-                audio.stop_recording(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
+            with gr.Tab('ChatBot'):
+                chatbot = gr.Chatbot(agent.get_history_for_chatbot, bubble_full_width=False, show_copy_button=True)
+                with gr.Row():
+                    txt = gr.Textbox(
+                        scale=4,
+                        show_label=False,
+                        placeholder="Enter text and press enter",
+                        container=False,
+                    )
+                    txt.submit(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
+                    btn = gr.UploadButton("📁", type="filepath")
+                    btn.upload(agent.process_file_input, [btn, chatbot], [chatbot, wav_speaker, mp3_speaker])
+                with gr.Row():
+                    audio_state = gr.State()
+                    audio = gr.Audio(sources="microphone", streaming=True, autoplay=True)
+                    audio.stream(agent.process_audio, [audio_state, audio], [audio_state, txt])
+                    audio.start_recording(lambda x:None, [audio_state], [audio_state]) # This wipes the audio_state at the start of listening
+                    audio.stop_recording(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
+            with gr.Tab('Crew'):
+                crew_num = 0
+                for crew in settings.crew + [AgentModel(role='', goal='', backstory='')]:
+                    crew_settings = [gr.Number(value=crew_num, visible=False)]
+                    with gr.Row():
+                        crew_settings.append(gr.Textbox(label='Role', value=crew.role))
+                    with gr.Row():
+                        crew_settings.append(gr.Textbox(label='Goal', value=crew.goal))
+                    with gr.Row():
+                        crew_settings.append(gr.Textbox(label='Backstory', value=crew.backstory))
+                    crew_num += 1
+                    update_button = gr.Button("Update")
+                    update_button.click(agent.update_crew_settings, crew_settings)
+                
 
 demo.queue()
 if __name__ == '__main__':

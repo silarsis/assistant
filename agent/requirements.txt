@@ -29,3 +29,7 @@ pyaudio
 elevenlabs
 keychain
 pyhive[presto]
+crewai
+crewai[tools]
+markdown
+keyring
