@@ -1,5 +1,4 @@
 from pydantic import BaseModel
-import os
 
 import openai
 from semantic_kernel.plugin_definition import kernel_function, kernel_function_context_parameter

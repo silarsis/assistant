@@ -3,8 +3,6 @@ import requests
 import os
 import json
 
-import semantic_kernel as sk
-
 from config import settings
 
 class LocalMemory:
