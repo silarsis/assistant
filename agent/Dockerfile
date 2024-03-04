@@ -15,6 +15,6 @@ ENV HUGGINGFACE_HUB_CACHE /models/
 COPY *.py .
 COPY character.txt .
 COPY models/ ./models/
-COPY .vscode/launch.json .vscode/launch.json
+# COPY .vscode/launch.json .vscode/launch.json
 
 CMD [ "python", "app.py" ]

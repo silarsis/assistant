@@ -3,6 +3,12 @@ version: '3.5'
 # Note, don't use port 8080 because google oauth uses that
 
 services:
+  agent:
+    build:
+      context: agent
+      dockerfile: Dockerfile
+    ports:
+      - "7860:7860"
   # A document store for memory for the assistant
   # chroma:
   #   image: ghcr.io/chroma-core/chroma:latest
