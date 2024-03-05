@@ -23,7 +23,7 @@ from models.guide import Guide, DEFAULT_SESSION_ID
 
 try:
     from transformers import pipeline
-except ImportError:
+except (ImportError, RuntimeError): # RuntimeError for a circular import
     pipeline = None
 
 from pydantic import BaseModel
@@ -168,6 +168,9 @@ class Agent(BaseModel):
         
     def speak(self, payload: str = ''):
         payload = self._clean_text_for_speech(payload)
+        if not payload:
+            print("Nothing to say")
+            return (None, None)
         if settings.voice == 'None':
             print("No TTS")
             return (None, None)

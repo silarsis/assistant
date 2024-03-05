@@ -5,6 +5,51 @@ import json
 
 from config import settings
 
+import semantic_kernel as sk
+from semantic_kernel.prompt_template.input_variable import InputVariable
+
+
+class SummariseResponse:
+    "Designed to summarise a conversation history"
+
+    prompt = """
+Summarise the following conversation history, taking the existing context into account:
+
+Context:
+{{$context}}
+
+History:
+{{$history}}
+
+Summary: """
+
+    def __init__(self, kernel: sk.Kernel, service_id: str = '', character: str = ""):
+        self.kernel = kernel
+        req_settings = kernel.get_service(service_id).get_prompt_execution_settings_class()(service_id=service_id)
+        req_settings.max_tokens = 2000
+        req_settings.temperature = 0.2
+        req_settings.top_p = 0.5
+        self.prompt_template_config = sk.PromptTemplateConfig(
+            template=self.prompt, 
+            name="summarise_conversation", 
+            input_variables=[
+                InputVariable(name="context", description="The context of the conversation", required=True),
+                InputVariable(name="history", description="The chat history", required=True),
+            ],
+            execution_settings=req_settings
+        )
+        self.chat_fn = self.kernel.create_function_from_prompt(
+            function_name="summarise_response", 
+            plugin_name="summarise_response",
+            description="Summarise a conversation",
+            prompt_template_config=self.prompt_template_config
+        )
+
+    async def response(self, context: str="", history: str="") -> str:
+        result = await self.kernel.invoke(self.chat_fn, context=context, history=history)
+        return str(result).strip()
+    
+    
 class LocalMemory:
     context: Optional[str] = None
     template: str = """
@@ -19,13 +64,12 @@ History:
 Summary: 
 """
     
-    def __init__(self, kernel=None):
+    def __init__(self, kernel: sk.Kernel=None, service_id: str=''):
         print("Local Memory")
         self.context = {}
         self.messages = {}
         self.kernel = kernel
-        self.prompt = kernel.create_semantic_function(
-            prompt_template=self.template, max_tokens=2000, temperature=0.2, top_p=0.5)
+        self.summariser = SummariseResponse(kernel, service_id=service_id)
         
     def refresh_from(self, session_id: str) -> None:
         self.load(session_id)
@@ -61,12 +105,9 @@ Summary:
         if not contextualise:
             return
         self.messages[session_id] = self.messages[session_id][-10:]
-        ctx = self.kernel.create_new_context()
-        ctx['context'] = self.context.setdefault(session_id, "") # get_context refreshes from file
-        ctx['history'] = "\n".join([message["content"] for message in contextualise])
-        response = await self.prompt(context=ctx)
-        self.context[session_id] = response.result
-        return response.result
+        response = await self.summariser.response(context=self.context.setdefault(session_id, ""), history="\n".join([message["content"] for message in contextualise]))
+        self.context[session_id] = response
+        return response
     
     async def add_message(self, role: str, content: str, session_id: str) -> None:
         self.messages.setdefault(session_id, []).append({"role": role, "content": content})

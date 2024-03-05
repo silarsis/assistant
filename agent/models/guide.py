@@ -7,7 +7,6 @@ import asyncio
 from pydantic import BaseModel
 
 # from models.tools import apify
-from models.tools.prompt_template import PromptTemplate
 from models.tools.memory import Memory
 from models.tools.openai_uploader import upload_image
 from models.tools.doc_store import DocStore
@@ -17,7 +16,9 @@ import semantic_kernel as sk
 from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion, OpenAIChatCompletion
 from semantic_kernel.connectors.ai.open_ai.services.azure_chat_completion import AsyncAzureOpenAI
 from semantic_kernel.connectors.ai.open_ai.services.open_ai_chat_completion import AsyncOpenAI
-from semantic_kernel.planning.stepwise_planner import StepwisePlanner
+from semantic_kernel.planners.sequential_planner import SequentialPlanner
+from semantic_kernel.prompt_template.input_variable import InputVariable
+from semantic_kernel.exceptions import PlannerException
 
 # from models.plugins.ScrapeText import ScrapeTextPlugin
 from models.plugins.WolframAlpha import WolframAlphaPlugin
@@ -27,7 +28,7 @@ from models.plugins.ImageGeneration import ImageGenerationPlugin
 from models.plugins.ScrapeText import ScrapeTextPlugin
 from models.plugins.CodeGeneration import CodeGenerationPlugin
 from models.plugins.CrewAI import CrewAIPlugin
-from semantic_kernel.core_plugins import FileIOPlugin, MathPlugin, TextPlugin, TimePlugin, TextMemoryPlugin
+from semantic_kernel.core_plugins import MathPlugin, TextPlugin, TimePlugin
 
 from config import settings
 
@@ -57,56 +58,68 @@ class Thought(Message):
 def getKernel(model: Optional[str] = "") -> sk.Kernel:
     load_dotenv(dotenv_path=".env")
     kernel = sk.Kernel()
-    model = model or settings.openai_deployment_name or "gpt-4"
+    service_id = model or settings.openai_deployment_name or "gpt-4"
     if settings.openai_api_type == "azure":
-        print("Azure")
         client = AsyncAzureOpenAI(api_key=settings.openai_api_key, organization=settings.openai_org_id, base_url=settings.openai_api_base)
-        kernel.add_chat_service("echo", AzureChatCompletion(settings.openai_deployment_name, async_client=client))
+        service = AzureChatCompletion(settings.openai_deployment_name, async_client=client, service_id=service_id)
     else:
-        print("OpenAI")
         client = AsyncOpenAI(api_key=settings.openai_api_key, organization=settings.openai_org_id, base_url=settings.openai_api_base)
-        kernel.add_chat_service("echo", OpenAIChatCompletion(model, async_client=client))
-    return kernel
+        service = OpenAIChatCompletion(service_id, async_client=client, service_id=service_id)
+    kernel.add_service(service)
+    return service_id, kernel
 
 
 class Guide:
     def __init__(self, default_character: str):
         print("Initialising Guide")
-        self.guide = getKernel()
+        self.service_id, self.guide = getKernel()
         self._setup_planner()
-        self.memory = Memory(kernel=self.guide)
+        self.memory = Memory(kernel=self.guide, service_id=self.service_id)
         self.default_character = default_character
-        self.direct_responder = DirectResponse(self.guide, character=self.default_character)
+        self.direct_responder = DirectResponse(self.guide, character=self.default_character, service_id=self.service_id)
+        self.rephrase_responder = RephraseResponse(self.guide, character=self.default_character, service_id=self.service_id)
+        self.selector_response = SelectorResponse(self.guide, character=self.default_character, service_id=self.service_id)
         print("Guide initialised")
 
     def _setup_planner(self):
         print("Setting up the planner and plugins")
         # self.guide.import_plugin(ScrapeTextPlugin, "ScrapeText")
         self._google_docs = GoogleDocLoaderPlugin(kernel=self.guide)
-        self.guide.import_plugin(self._google_docs, "gdoc")
+        self.guide.import_plugin_from_object(self._google_docs, "gdoc")
         if settings.wolfram_alpha_appid:
-            self.guide.import_plugin(WolframAlphaPlugin(wolfram_alpha_appid=settings.wolfram_alpha_appid), "wolfram")
-        self.guide.import_plugin(MathPlugin(), "math")
-        self.guide.import_plugin(FileIOPlugin(), "fileIO")
-        self.guide.import_plugin(TimePlugin(), "time")
-        self.guide.import_plugin(TextPlugin(), "text")
-        self.guide.import_plugin(TextMemoryPlugin(), "text_memory")
-        self.guide.import_plugin(ImageGenerationPlugin(), "image_generation")
-        self.guide.import_plugin(ScrapeTextPlugin(), "scrape_text")
+            self.guide.import_plugin_from_object(WolframAlphaPlugin(wolfram_alpha_appid=settings.wolfram_alpha_appid), "wolfram")
+        self.guide.import_plugin_from_object(MathPlugin(), "math")
+        self.guide.import_plugin_from_object(TimePlugin(), "time")
+        self.guide.import_plugin_from_object(TextPlugin(), "text")
+        # self.guide.import_plugin_from_object(TextMemoryPlugin(), "text_memory")
+        self.guide.import_plugin_from_object(ImageGenerationPlugin(), "image_generation")
+        self.guide.import_plugin_from_object(ScrapeTextPlugin(), "scrape_text")
         if settings.google_api_key: # Note this relies on the env variable being set, check this
-            self.guide.import_plugin(GoogleSearchPlugin(), "google_search")
-        self.guide.import_plugin(CrewAIPlugin(), "crew_ai")
-        self.guide.import_plugin(CodeGenerationPlugin(kernel=self.guide), "code_generation")
-        self.planner = StepwisePlanner(self.guide)
+            self.guide.import_plugin_from_object(GoogleSearchPlugin(), "google_search")
+        self.guide.import_plugin_from_object(CrewAIPlugin(kernel=self.guide.get_service(self.service_id).client), "crew_ai")
+        self.guide.import_plugin_from_object(CodeGenerationPlugin(kernel=self.guide), "code_generation")
+        self.planner = SequentialPlanner(self.guide, self.service_id)
         print("Planner created")
 
     async def _plan(self, goal: str, callback: Callable[[str], None], history_context: str, history: str, session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False) -> Message:
         try:
-            plan = self.planner.create_plan(goal=goal)
+            plan = await self.planner.create_plan(goal=goal)
             if hear_thoughts:
                 pass
                 #callback(Thought(mesg=f"Planning result"))
-            result = await plan.invoke()
+            for step in plan._steps:
+                print(step.description, ":", step._state.__dict__)
+            result = await plan.invoke(self.guide)
+        except PlannerException as e:
+            try:
+                if e.args[1].args[0] == 'Not possible to create plan for goal with available functions.\n':
+                    return Thought(mesg=e.args[1].args[0])
+            except Exception:
+                pass
+            print(f"Planning failed: {e}")
+            if hear_thoughts:
+                await callback(Thought(mesg=str(e)))
+            result = ""
         except Exception as e:
             print(f"Planning failed: {e}")
             if hear_thoughts:
@@ -118,41 +131,12 @@ class Guide:
         # Rephrase the text to match the character
         # TODO: Is there a way to force calling a particular plugin at the end of all other plugins in the planner?
         # If so, we could force rephrasing that way.
-        prompt = PromptTemplate(
-            self.default_character, 
-            f"""
-You were asked "{input}" and your subordinate helpers suggests the answer to be "{answer.mesg}".
-Please respond to the user with this answer. If your chat history or context suggests a better answer, please use that instead.
-Check the chat history and context for answers to the question also.
-
-Context:
-{{$context}}
-
-Chat History:
-{{$history}}
-
-Answer: 
-            """
-        ).get(session_id, self.guide)
-        ctx = self.guide.create_new_context()
-        ctx.variables['input'] = answer.mesg
-        ctx.variables['history'] = history
-        ctx.variables['history_context'] = history_context
-        result = await prompt.invoke(context=ctx)
+        result = await self.rephrase_responder.response(history_context, history, input, answer)
         return Thought(mesg=str(result).strip())
     
     async def _pick_best_answer(self, prompt: str, response1: Message, response2: Message) -> str:
         # Ask the guide which is the better response
-        prompt_template = f"""
-You have been tasked with answering the following: {prompt}.
-Select the most informative response from the following two responses and indicate your selection by sending either 'response 1' or 'response 2':
-Response 1: {response1}
-Response 2: {response2}
-        """
-        query = self.guide.create_semantic_function(
-            prompt_template=prompt_template,
-            max_tokens=2000, temperature=0.2, top_p=0.5)
-        result = await query.invoke()
+        result = await self.selector_response.response(prompt=prompt, response1=response1, response2=response2)
         print(result)
         print(f"Response 1: {response1}")
         print(f"Response 2: {response2}")
@@ -207,8 +191,8 @@ Response 2: {response2}
         await callback(Response("Document Uploaded"))
 
     async def update_prompt_template(self, prompt: str, callback: Callable[[str], None], **kwargs) -> str:
-        self.direct_responder._prompt_templates.set(kwargs.get("session_id", DEFAULT_SESSION_ID), prompt)
-        await callback("Done")
+        # self.direct_responder._prompt_templates.set(kwargs.get("session_id", DEFAULT_SESSION_ID), prompt)
+        await callback("Not Done")
 
     def update_google_docs_token(self, token: Any) -> Response:
         self._google_docs.set_credentials(token)
@@ -237,16 +221,116 @@ Chat History:
 Human: {{$input}}
 Answer: """
 
-    def __init__(self, kernel: sk.Kernel, character: str = ""):
+    def __init__(self, kernel: sk.Kernel, service_id: str = '', character: str = ""):
+        self.character = character # So we can support changing it later
         self.kernel = kernel
-        self.character = character
-        self._prompt_templates = PromptTemplate(self.character, self.prompt)
+        req_settings = kernel.get_service(service_id).get_prompt_execution_settings_class()(service_id=service_id)
+        req_settings.max_tokens = 2000
+        req_settings.temperature = 0.2
+        req_settings.top_p = 0.5
+        self.prompt_template_config = sk.PromptTemplateConfig(
+            template=character + self.prompt, 
+            name="direct_response", 
+            input_variables=[
+                InputVariable(name="context", description="The context of the conversation", required=True),
+                InputVariable(name="history", description="The chat history", required=True),
+                InputVariable(name="input", description="The input question you must answer", required=True),
+            ],
+            execution_settings=req_settings
+        )
+        self.chat_fn = self.kernel.create_function_from_prompt(
+            function_name="direct_response", plugin_name="direct_response",
+            description="Directly answer a question",
+            prompt_template_config=self.prompt_template_config
+        )
 
-    async def response(self, context: str, history: str, input: str, session_id: Optional[str] = DEFAULT_SESSION_ID, **kwargs) -> Message:
-        prompt = self._prompt_templates.get(session_id, self.kernel)
-        ctx = self.kernel.create_new_context()
-        ctx.variables["context"] = context
-        ctx.variables["history"] = history
-        ctx.variables["input"] = input
-        result = await prompt.invoke(context=ctx)
+    async def response(self, context: str, history: str, input: str, **kwargs) -> Message:
+        result = await self.kernel.invoke(self.chat_fn, context=context, history=history, input=input)
+        return Thought(mesg=str(result).strip())
+
+class RephraseResponse:
+    "Designed to rephrase an answer to match the character's style"
+
+    prompt = """
+
+You were asked "{{$input}}" and your subordinate helpers suggests the answer to be "{{$answer_mesg}}".
+Please respond to the user with this answer. If your chat history or context suggests a better answer, please use that instead.
+Check the chat history and context for answers to the question also.
+
+Context:
+{{$context}}
+
+Chat History:
+{{$history}}
+
+Human: {{$input}}
+Answer:  """
+
+    def __init__(self, kernel: sk.Kernel, service_id: str = '', character: str = ""):
+        self.character = character # So we can support changing it later
+        self.kernel = kernel
+        req_settings = kernel.get_service(service_id).get_prompt_execution_settings_class()(service_id=service_id)
+        req_settings.max_tokens = 2000
+        req_settings.temperature = 0.2
+        req_settings.top_p = 0.5
+        self.prompt_template_config = sk.PromptTemplateConfig(
+            template=character + self.prompt, 
+            name="rephrase_response", 
+            input_variables=[
+                InputVariable(name="context", description="The context of the conversation", required=True),
+                InputVariable(name="history", description="The chat history", required=True),
+                InputVariable(name="input", description="The input question you must answer", required=True),
+                InputVariable(name="answer_mesg", description="The answer to rephrase", required=True)
+            ],
+            execution_settings=req_settings
+        )
+        self.chat_fn = self.kernel.create_function_from_prompt(
+            function_name="rephrase_response", plugin_name="rephrase_response",
+            description="Rephrase an answer to match the character's style",
+            prompt_template_config=self.prompt_template_config
+        )
+
+    async def response(self, context: str, history: str, input: str, answer_mesg: str, **kwargs) -> Message:
+        result = await self.kernel.invoke(self.chat_fn, context=context, history=history, input=input, answer_mesg=answer_mesg)
+        return Thought(mesg=str(result).strip())
+
+class SelectorResponse:
+    "Designed to select between responses"
+
+    prompt = """
+
+You have been tasked with answering the following: {{$prompt}}.
+Select the most informative response from the following two responses and indicate your selection by sending either 'response 1' or 'response 2'.
+If the responses are factually different, trust the first one more. If the first one is not informative, trust the second one more.
+
+Response 1: {{$response1}}
+Response 2: {{$response2}}
+
+Answer: """
+
+    def __init__(self, kernel: sk.Kernel, service_id: str = '', character: str = ""):
+        self.character = character # So we can support changing it later
+        self.kernel = kernel
+        req_settings = kernel.get_service(service_id).get_prompt_execution_settings_class()(service_id=service_id)
+        req_settings.max_tokens = 2000
+        req_settings.temperature = 0.2
+        req_settings.top_p = 0.5
+        self.prompt_template_config = sk.PromptTemplateConfig(
+            template=character + self.prompt, 
+            name="rephrase_response", 
+            input_variables=[
+                InputVariable(name="prompt", description="The original question", required=True),
+                InputVariable(name="response1", description="The first response", required=True),
+                InputVariable(name="response2", description="The second response", required=True)
+            ],
+            execution_settings=req_settings
+        )
+        self.chat_fn = self.kernel.create_function_from_prompt(
+            function_name="selector_response", plugin_name="selector_response",
+            description="Select between responses",
+            prompt_template_config=self.prompt_template_config
+        )
+
+    async def response(self, prompt: str, response1: str, response2: str, **kwargs) -> Message:
+        result = await self.kernel.invoke(self.chat_fn, prompt=prompt, response1=response1, response2=response2)
         return Thought(mesg=str(result).strip())

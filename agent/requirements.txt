@@ -33,3 +33,4 @@ crewai
 crewai[tools]
 markdown
 keyring
+numpy

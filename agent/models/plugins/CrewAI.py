@@ -1,10 +1,9 @@
-from typing import Any, List
+from typing import Any, List, Annotated
 
 from config import settings
 
 from crewai import Agent, Task, Crew, Process
-from semantic_kernel.plugin_definition import kernel_function, kernel_function_context_parameter
-from semantic_kernel.orchestration.kernel_context import KernelContext
+from semantic_kernel.functions.kernel_function_decorator import kernel_function
 
 from pydantic import BaseModel
 
@@ -13,7 +12,7 @@ class CrewAIPlugin(BaseModel):
     agents: List[Agent] = []
     tasks: List[Task] = []
     
-    def _create_agents(self, role: str, goal: str, backstory: str) -> None:
+    def _create_agents(self) -> None:
         self.agents = []
         for crew in settings.crew:
             self.agents.append(
@@ -27,11 +26,11 @@ class CrewAIPlugin(BaseModel):
                 )
             )
         
-    def _create_task(self, description: str, expected_outcome: str) -> None:
+    def _create_task(self, description: str, expected_output: str) -> None:
         self.tasks = [
             Task(
                 description=description,
-                expected_outcome=expected_outcome
+                expected_output=expected_output
             )
         ]
     
@@ -45,20 +44,10 @@ class CrewAIPlugin(BaseModel):
             verbose=2
         )
     
-    @kernel_function(
-        description="Complex problems requiring a crew of agents",
-        name="ask_crew"
-    )
-    @kernel_function_context_parameter(
-        name='task',
-        description='The task to undertake'
-    )
-    @kernel_function_context_parameter(
-        name='outcome',
-        description='The expected outcome of the task'
-    )
-    def ask_crew(self, context: KernelContext) -> str:
-        self._create_task(context['task'], context['outcome'])
+    @kernel_function()
+    def ask_crew(self, task: Annotated[str, "The task to undertake"], outcome: Annotated[str, "The expected outcome of the task"]) -> str:
+        " Ask a crew to undertake a task "
+        self._create_task(task, outcome)
         self._setup_crew()
         self._crew.kickoff()
         

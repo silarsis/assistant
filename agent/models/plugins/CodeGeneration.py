@@ -1,8 +1,9 @@
 from pydantic import BaseModel
-from typing import Any
+from typing import Any, Annotated
 import os
 
-from semantic_kernel.plugin_definition import kernel_function, kernel_function_context_parameter
+
+from semantic_kernel.functions.kernel_function_decorator import kernel_function
 
 from config import settings
 
@@ -20,19 +21,14 @@ class CodeGenerationPlugin(BaseModel):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.prompt = self.kernel.create_semantic_function(
-            prompt_template=CHARACTER + PROMPT, max_tokens=2000, temperature=0.2, top_p=0.5)
+        self.prompt = self.kernel.create_function_from_prompt(
+            function_name="generate_code", plugin_name="code_generation",
+            description="Generage code from a specification",
+            prompt=CHARACTER + PROMPT, max_tokens=2000, temperature=0.2, top_p=0.5)
 
-    @kernel_function(
-        description="Generate code",
-        name="generate_code",
-        input_description="Specification of the code needed"
-    )
-    @kernel_function_context_parameter(
-        name="specification",
-        description="The code specification"
-    )
-    async def gen_code(self, specification: str = "") -> str:
+    @kernel_function()
+    async def gen_code(self, specification: Annotated[str, "The code specification"] = "") -> str:
+        " Generage code from a specification "
         ctx = self.kernel.create_new_context()
         ctx.variables["input"] = input
         result = await self.prompt.invoke(context=ctx)

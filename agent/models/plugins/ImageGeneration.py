@@ -1,7 +1,8 @@
 from pydantic import BaseModel
+from typing import Annotated
 
 import openai
-from semantic_kernel.plugin_definition import kernel_function, kernel_function_context_parameter
+from semantic_kernel.functions.kernel_function_decorator import kernel_function
 
 from config import settings
 
@@ -85,16 +86,9 @@ class ImageGenerationPlugin(BaseModel):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-    @kernel_function(
-        description="Generate an image from a description",
-        name="generate_image",
-        input_description="Description of the image"
-    )
-    @kernel_function_context_parameter(
-        name="description",
-        description="The image description"
-    )
-    def gen_image(self, description: str = "") -> str:
+    @kernel_function()
+    def gen_image(self, description: Annotated[str, "The image description"] = "") -> str:
+        " Generate an image from a description "
         if self.api_type == "azure":
             client = openai.AzureOpenAI(
                 api_key=self.api_key, 

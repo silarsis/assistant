@@ -1,9 +1,8 @@
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Annotated
 
 from pydantic import BaseModel
 
-from semantic_kernel.plugin_definition import kernel_function, kernel_function_context_parameter
-from semantic_kernel.orchestration.kernel_context import KernelContext
+from semantic_kernel.functions.kernel_function_decorator import kernel_function
 
 from googleapiclient.discovery import build
 # import to provide google.auth.credentials.Credentials
@@ -12,7 +11,7 @@ from langchain.docstore.document import Document
 
 import chromadb
 from chromadb.config import Settings
-from chromadb.utils import embedding_functions
+# from chromadb.utils import embedding_functions
 
 import re
 import time
@@ -27,10 +26,12 @@ class GoogleDocLoaderPlugin(BaseModel):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._embeddings = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+        # self._embeddings = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
         # I think I really want to cache the results of these summarise calls
-        self._summarize_prompt = self.kernel.create_semantic_function(
-            prompt_template="Write a short summary of the following. Do not add any details that are not already there, and if you cannot summarise simply say 'no summary': {{$content}}", 
+        self._summarize_prompt = self.kernel.create_function_from_prompt(
+            function_name="summarize", plugin_name="gdocs", 
+            description="Summarize a document",
+            prompt="Write a short summary of the following. Do not add any details that are not already there, and if you cannot summarise simply say 'no summary': {{$content}}", 
             max_tokens=2000, temperature=0.2, top_p=0.5)
         self._connect_to_local_chromadb()
         
@@ -85,7 +86,7 @@ class GoogleDocLoaderPlugin(BaseModel):
         cache_key = self._cache_key(collection_name)
         if cache_key not in self._vector_stores:
             self._vector_stores[cache_key] = self._chroma_client.create_collection(
-                embedding_function=self._embeddings,
+                # embedding_function=self._embeddings,
                 name=cache_key, get_or_create=True
             )
         return self._vector_stores[cache_key]
@@ -124,16 +125,9 @@ class GoogleDocLoaderPlugin(BaseModel):
             summaries.append(await _summarize(block.strip()))
         return await _summarize("\n".join(summaries))
 
-    @kernel_function(
-        description="Load a Google Doc into the vector store",
-        name="load_google_doc",
-        input_description="The Google Doc ID"
-    )
-    @kernel_function_context_parameter(
-        name="docid",
-        description="The document ID in Google"
-    )
-    async def load_doc(self, docid: str, context: KernelContext, interim: Callable=None) -> str:
+    @kernel_function()
+    async def load_doc(self, docid: Annotated[str, "The google document ID"] = "") -> str:
+        " Load a google document into the vector store "
         if not self._credentials:
             return "Unauthorized, please login"
         if docid.startswith('http'):
@@ -145,7 +139,7 @@ class GoogleDocLoaderPlugin(BaseModel):
         # Need to store in a separate db for the cleartext, with the same chunking of elements
         # Then, we can use the same ids to retrieve the cleartext for things like summarization
         # Now summarize the doc
-        summarized_doc = await self._summarize_elements(elements, interim=interim)
+        summarized_doc = await self._summarize_elements(elements, interim=None)
         return f"Document loaded successfully. Document Summary: {summarized_doc}"
 
     

@@ -7,6 +7,8 @@ WORKDIR /app
 COPY requirements.txt ./
 ENV PYTHONUNBUFFERED 1
 
+RUN apt-get update && apt-get install -y portaudio19-dev python3-pyaudio
+
 RUN /usr/local/bin/python -m pip install --root-user-action=ignore --upgrade pip \
     && pip install --no-cache-dir --root-user-action=ignore -r requirements.txt
 
@@ -17,4 +19,4 @@ COPY character.txt .
 COPY models/ ./models/
 # COPY .vscode/launch.json .vscode/launch.json
 
-CMD [ "python", "app.py" ]
+CMD [ "python", "client_gradio.py" ]
