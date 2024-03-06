@@ -296,13 +296,25 @@ class Agent(BaseModel):
         settings.presto_password = presto_password
         settings.save()
         
-    def update_crew_settings(self, crew_num, role: str, goal: str, backstory: str) -> None:
+    def update_crew_settings(self, crew_num: int, role: str, goal: str, backstory: str) -> None:
         crew = AgentModel(role=role, goal=goal, backstory=backstory)
-        if crew_num > len(settings.crew):
+        if crew_num >= len(settings.crew):
             settings.crew.append(crew)
         else:
             settings.crew[crew_num] = crew
         settings.save()
+
+def render_crew(crew_num: int, crew: AgentModel, render: bool = True) -> gr.Accordion:
+    with gr.Accordion(f"Crewmember role: {crew.role or 'New'}", open=False, render=render) as crew_member:
+        crew_settings = [
+            gr.Number(value=crew_num, visible=False),
+            gr.Textbox(label='Role', value=crew.role),
+            gr.Textbox(label='Goal', value=crew.goal),
+            gr.Textbox(label='Backstory', value=crew.backstory)
+        ]
+        update_button = gr.Button("Update")
+        update_button.click(agent.update_crew_settings, crew_settings)
+    return crew_member
 
 agent = Agent()
 
@@ -310,7 +322,6 @@ with gr.Blocks(fill_height=True) as demo:
     agent.settings_block = demo
     with gr.Row():
         with gr.Column(scale=2):
-        # with gr.Tab('Settings'):
             with gr.Accordion("Settings", open=True):
                 with gr.Row():
                     with gr.Column(scale=4):
@@ -389,19 +400,12 @@ with gr.Blocks(fill_height=True) as demo:
                     audio.stream(agent.process_audio, [audio_state, audio], [audio_state, txt])
                     audio.start_recording(lambda x:None, [audio_state], [audio_state]) # This wipes the audio_state at the start of listening
                     audio.stop_recording(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
-            with gr.Tab('Crew'):
-                crew_num = 0
-                for crew in settings.crew + [AgentModel(role='', goal='', backstory='')]:
-                    crew_settings = [gr.Number(value=crew_num, visible=False)]
-                    with gr.Row():
-                        crew_settings.append(gr.Textbox(label='Role', value=crew.role))
-                    with gr.Row():
-                        crew_settings.append(gr.Textbox(label='Goal', value=crew.goal))
-                    with gr.Row():
-                        crew_settings.append(gr.Textbox(label='Backstory', value=crew.backstory))
-                    crew_num += 1
-                    update_button = gr.Button("Update")
-                    update_button.click(agent.update_crew_settings, crew_settings)
+            with gr.Tab('Crew') as crew_tab:
+                all_crew =[]
+                for crew_num, crew in enumerate(settings.crew):
+                    all_crew.append(render_crew(crew_num, crew))
+                for new_crew_num in range(crew_num+1, 5):
+                    all_crew.append(render_crew(new_crew_num, AgentModel(role='', goal='', backstory='')))
                 
 
 demo.queue()
