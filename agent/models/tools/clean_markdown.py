@@ -7,7 +7,11 @@ from xml.etree.ElementTree import Comment, ElementTree
 
 
 def _serialize_plain_text(write, elem):
-    tag = elem.tag
+    try:
+        tag = elem.tag
+    except AttributeError:
+        write(str(elem))
+        return
     text = elem.text
     if tag is Comment:
         pass
