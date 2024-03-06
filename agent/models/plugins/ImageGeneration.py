@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import Annotated
 
 import openai
+from models.tools.llm_connect import LLMConnect
 from semantic_kernel.functions.kernel_function_decorator import kernel_function
 
 from config import settings
@@ -89,21 +90,12 @@ class ImageGenerationPlugin(BaseModel):
     @kernel_function()
     def gen_image(self, description: Annotated[str, "The image description"] = "") -> str:
         " Generate an image from a description "
-        if self.api_type == "azure":
-            client = openai.AzureOpenAI(
-                api_key=self.api_key, 
-                azure_endpoint=self.base_url, 
-                api_version=self.api_version,
-                http_client=httpx.Client(
-                    transport=CustomHTTPTransport(),
-                )
-            )
-        else:
-            client = openai.OpenAI(
-                api_key=self.api_key, 
-                base_url=self.base_url, 
-                organization=self.org_id
-            )
+        client = LLMConnect(
+            api_type=self.api_type, 
+            api_key=self.api_key, 
+            api_base=self.base_url, 
+            org_id=self.org_id
+        ).openai()
         result = client.images.generate(
             prompt=description, 
             size="1024x1024",
