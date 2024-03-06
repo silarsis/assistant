@@ -14,7 +14,7 @@ is the one in the root of the project. Rerun the agent if you change any of thes
 
 If you want to do certain things, you'll need the containers running - we're down to a text-to-speech and a chromadb for the google docs
 plugin. Simply run `docker-compose up -d` and it should run the containers for you - or, if you want to point at a SaaS solution,
-check the .env file.
+check the .env file. `docker-compose build --no-cache--pull` for building the docker images.
 
 ## Goals
 
