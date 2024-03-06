@@ -30,15 +30,14 @@ class LLMConnect(BaseModel):
             llm = ChatOpenAI(client=self.openai(), model=self.deployment_name)
         return llm
     
-    def sk(self) -> Tuple[str, Union[AzureChatCompletion, OpenAIChatCompletion]]:
+    def sk(self, service_id: str='default') -> Tuple[str, Union[AzureChatCompletion, OpenAIChatCompletion]]:
         " Connect via Semantic Kernel "
-        service_id = self.deployment_name
         if self.api_type == "azure":
             client = AsyncAzureOpenAI(api_key=self.api_key, organization=self.org_id, base_url=self.api_base)
             service = AzureChatCompletion(self.deployment_name, async_client=client, service_id=service_id)
         else:
             client = AsyncOpenAI(api_key=self.api_key, organization=self.org_id, base_url=self.api_base)
-            service = OpenAIChatCompletion(service_id, async_client=client, service_id=service_id)
+            service = OpenAIChatCompletion(self.deployment_name, async_client=client, service_id=service_id)
         return service_id, service
     
     def openai(self) -> Union[AzureOpenAI, OpenAI]:
@@ -54,8 +53,7 @@ class LLMConnect(BaseModel):
         else:
             client = OpenAI(
                 api_key=self.api_key,
-                api_version=self.api_version,
                 organization=self.org_id,
-                base_url=self.api_base
+                base_url=self.api_base,
             )
         return client
