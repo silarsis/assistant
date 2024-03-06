@@ -1,7 +1,6 @@
 ## Tools
 import base64
 from typing import Optional, Callable, Any, Literal, Union
-from dotenv import load_dotenv
 import asyncio
 
 from pydantic import BaseModel
@@ -10,12 +9,10 @@ from pydantic import BaseModel
 from models.tools.memory import Memory
 from models.tools.openai_uploader import upload_image
 from models.tools.doc_store import DocStore
+from models.tools.llm_connect import LLMConnect
 
 # New semantic kernel setup
 import semantic_kernel as sk
-from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion, OpenAIChatCompletion
-from semantic_kernel.connectors.ai.open_ai.services.azure_chat_completion import AsyncAzureOpenAI
-from semantic_kernel.connectors.ai.open_ai.services.open_ai_chat_completion import AsyncOpenAI
 from semantic_kernel.planners.sequential_planner import SequentialPlanner
 from semantic_kernel.prompt_template.input_variable import InputVariable
 from semantic_kernel.exceptions import PlannerException
@@ -26,7 +23,6 @@ from models.plugins.GoogleDocs import GoogleDocLoaderPlugin
 from models.plugins.GoogleSearch import GoogleSearchPlugin
 from models.plugins.ImageGeneration import ImageGenerationPlugin
 from models.plugins.ScrapeText import ScrapeTextPlugin
-from models.plugins.CodeGeneration import CodeGenerationPlugin
 from models.plugins.CrewAI import CrewAIPlugin
 from semantic_kernel.core_plugins import MathPlugin, TextPlugin, TimePlugin
 
@@ -56,15 +52,14 @@ class Thought(Message):
     type: str = "thought"
 
 def getKernel(model: Optional[str] = "") -> sk.Kernel:
-    load_dotenv(dotenv_path=".env")
     kernel = sk.Kernel()
-    service_id = model or settings.openai_deployment_name or "gpt-4"
-    if settings.openai_api_type == "azure":
-        client = AsyncAzureOpenAI(api_key=settings.openai_api_key, organization=settings.openai_org_id, base_url=settings.openai_api_base)
-        service = AzureChatCompletion(settings.openai_deployment_name, async_client=client, service_id=service_id)
-    else:
-        client = AsyncOpenAI(api_key=settings.openai_api_key, organization=settings.openai_org_id, base_url=settings.openai_api_base)
-        service = OpenAIChatCompletion(service_id, async_client=client, service_id=service_id)
+    service_id, service = LLMConnect(
+        api_type=settings.openai_api_type, 
+        api_key=settings.openai_api_key, 
+        api_base=settings.openai_api_base, 
+        deployment_name=settings.openai_deployment_name, 
+        org_id=settings.openai_org_id
+    ).sk()
     kernel.add_service(service)
     return service_id, kernel
 
@@ -91,13 +86,16 @@ class Guide:
         self.guide.import_plugin_from_object(MathPlugin(), "math")
         self.guide.import_plugin_from_object(TimePlugin(), "time")
         self.guide.import_plugin_from_object(TextPlugin(), "text")
-        # self.guide.import_plugin_from_object(TextMemoryPlugin(), "text_memory")
         self.guide.import_plugin_from_object(ImageGenerationPlugin(), "image_generation")
         self.guide.import_plugin_from_object(ScrapeTextPlugin(), "scrape_text")
         if settings.google_api_key: # Note this relies on the env variable being set, check this
             self.guide.import_plugin_from_object(GoogleSearchPlugin(), "google_search")
         self.guide.import_plugin_from_object(CrewAIPlugin(kernel=self.guide.get_service(self.service_id).client), "crew_ai")
-        self.guide.import_plugin_from_object(CodeGenerationPlugin(kernel=self.guide), "code_generation")
+        self.guide.create_function_from_prompt(
+            function_name="generate_code", plugin_name="code_generation",
+            description="Generage code from a specification",
+            prompt="You are an expert developer who has a special interest in security.\nGenerate code according to the following specifications:\n{{$input}}", 
+            max_tokens=2000, temperature=0.2, top_p=0.5)
         self.planner = SequentialPlanner(self.guide, self.service_id)
         print("Planner created")
 
@@ -105,10 +103,8 @@ class Guide:
         try:
             plan = await self.planner.create_plan(goal=goal)
             if hear_thoughts:
-                pass
-                #callback(Thought(mesg=f"Planning result"))
-            for step in plan._steps:
-                print(step.description, ":", step._state.__dict__)
+                thought = '\n'.join([f"{step.description} : {step._state.__dict__}" for step in plan._steps])
+                await callback(Thought(mesg=f"Planning result:\n{thought}"))
             result = await plan.invoke(self.guide)
         except PlannerException as e:
             try:
@@ -131,16 +127,15 @@ class Guide:
         # Rephrase the text to match the character
         # TODO: Is there a way to force calling a particular plugin at the end of all other plugins in the planner?
         # If so, we could force rephrasing that way.
-        result = await self.rephrase_responder.response(history_context, history, input, answer)
-        return Thought(mesg=str(result).strip())
+        return await self.rephrase_responder.response(history_context, history, input, answer.mesg)
     
-    async def _pick_best_answer(self, prompt: str, response1: Message, response2: Message) -> str:
+    async def _pick_best_answer(self, prompt: str, response1: Message, response2: Message) -> Message:
         # Ask the guide which is the better response
         result = await self.selector_response.response(prompt=prompt, response1=response1, response2=response2)
         print(result)
         print(f"Response 1: {response1}")
         print(f"Response 2: {response2}")
-        if '1' in str(result):
+        if '1' in str(result.mesg):
             return response1
         return response2
     

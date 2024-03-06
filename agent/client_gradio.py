@@ -17,7 +17,8 @@ import google_auth_oauthlib
 import pyaudio
 import wave
 import elevenlabs
-from openai import OpenAI
+
+from models.tools.llm_connect import LLMConnect
 
 from models.guide import Guide, DEFAULT_SESSION_ID
 
@@ -179,7 +180,13 @@ class Agent(BaseModel):
             return (None, b"".join([bytes(a) for a in self.elevenlabs_get_stream(text=payload)]))
         elif settings.voice == 'OpenAI':
             print("OpenAI TTS")
-            client = OpenAI()
+            client = LLMConnect(
+                api_type=settings.openai_api_type, 
+                api_key=settings.openai_api_key, 
+                api_base=settings.openai_api_base, 
+                deployment_name=settings.openai_deployment_name, 
+                org_id=settings.openai_org_id
+            ).openai()
             response = client.audio.speech.create(model='tts-1', voice='nova', input=payload)
             retval = (None, b''.join(response.iter_bytes()))
             return retval
@@ -316,7 +323,7 @@ def render_crew(crew_num: int, crew: AgentModel, render: bool = True) -> gr.Acco
         update_button.click(agent.update_crew_settings, crew_settings)
     return crew_member
 
-agent = Agent()
+agent = Agent(character=settings.character)
 
 with gr.Blocks(fill_height=True) as demo:
     agent.settings_block = demo
@@ -366,10 +373,6 @@ with gr.Blocks(fill_height=True) as demo:
                 with gr.Accordion("Image Upload Keys", open=False):
                     api_key = gr.Textbox(label="Image API Key", value=settings.img_upload_api_key, type="password")
                     api_key.input(agent.update_img_api_key, [api_key])
-                with gr.Accordion("Character (does not persist yet)", open=False):
-                    char = gr.Textbox(agent._character, show_copy_button=True, lines=5)
-                    char_btn = gr.Button("Update")
-                    char_btn.click(agent.update_character, [char], [char])
                 with gr.Accordion("Presto", open=False):
                     presto_config = [
                         gr.Textbox(label="Presto Hostname", value=settings.presto_host),
@@ -400,6 +403,10 @@ with gr.Blocks(fill_height=True) as demo:
                     audio.stream(agent.process_audio, [audio_state, audio], [audio_state, txt])
                     audio.start_recording(lambda x:None, [audio_state], [audio_state]) # This wipes the audio_state at the start of listening
                     audio.stop_recording(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
+            with gr.Tab('Character'):
+                char = gr.Textbox(agent._character, show_copy_button=True, lines=5)
+                char_btn = gr.Button("Update")
+                char_btn.click(agent.update_character, [char], [char])
             with gr.Tab('Crew') as crew_tab:
                 all_crew =[]
                 for crew_num, crew in enumerate(settings.crew):

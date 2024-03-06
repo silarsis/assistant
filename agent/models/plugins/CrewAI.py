@@ -1,24 +1,41 @@
-from typing import Any, List, Annotated
+from typing import Any, List, Annotated, Union
 
 from config import settings
 
 from crewai import Agent, Task, Crew, Process
 from semantic_kernel.functions.kernel_function_decorator import kernel_function
 
-from langchain_openai import ChatOpenAI
+from models.tools.llm_connect import LLMConnect, AzureChatOpenAI, ChatOpenAI
 
 from pydantic import BaseModel
 
+## Monkey patch telemetry out
+from crewai.telemetry import Telemetry
+
+def noop(*args, **kwargs):
+    pass
+
+for attr in dir(Telemetry):
+    if callable(getattr(Telemetry, attr)) and not attr.startswith("__"):
+        setattr(Telemetry, attr, noop)
+## End monkey patch
+
 class CrewAIPlugin(BaseModel):
     kernel: Any = None
-    llm: ChatOpenAI = None
+    llm: Union[ChatOpenAI,AzureChatOpenAI] = None
     agents: List[Agent] = []
     tasks: List[Task] = []
     
     def __init__(self, kernel=None):
         super().__init__()
         self.kernel = kernel
-        self.llm = ChatOpenAI(async_client=self.kernel)
+        self.llm = LLMConnect(
+            api_type=settings.openai_api_type, 
+            api_key=settings.openai_api_key, 
+            api_base=settings.openai_api_base, 
+            deployment_name=settings.openai_deployment_name, 
+            org_id=settings.openai_org_id
+        ).langchain()
         
     def _create_agents(self) -> None:
         self.agents = []
@@ -57,7 +74,7 @@ class CrewAIPlugin(BaseModel):
         " Ask a crew to undertake a task "
         self._create_task(task, outcome)
         self._setup_crew()
-        self._crew.kickoff()
+        return self._crew.kickoff()
         
 
 # # Define your agents with roles and goals
