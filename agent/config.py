@@ -77,7 +77,7 @@ Always check the context and chat history first to see if you know an answer.
     openai_api_version: str = "2023-06-01-preview"
     openai_api_key: str = ""
     openai_api_base: Optional[str] = None
-    openai_deployment_name: str = ""
+    openai_deployment_name: str = "gpt-4"
     openai_org_id: Optional[str] = None
     # Image generation variables, in case they're different
     img_openai_inherit: bool = True # Inherit from the main OpenAI settings
