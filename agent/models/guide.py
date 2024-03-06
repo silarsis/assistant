@@ -53,6 +53,8 @@ class Thought(Message):
 
 def getKernel(model: Optional[str] = "") -> sk.Kernel:
     kernel = sk.Kernel()
+    if not settings.openai_deployment_name:
+        settings.openai_deployment_name = "gpt-4"
     service_id, service = LLMConnect(
         api_type=settings.openai_api_type, 
         api_key=settings.openai_api_key, 
