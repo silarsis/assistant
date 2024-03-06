@@ -5,13 +5,21 @@ from config import settings
 from crewai import Agent, Task, Crew, Process
 from semantic_kernel.functions.kernel_function_decorator import kernel_function
 
+from langchain_openai import ChatOpenAI
+
 from pydantic import BaseModel
 
 class CrewAIPlugin(BaseModel):
     kernel: Any = None
+    llm: ChatOpenAI = None
     agents: List[Agent] = []
     tasks: List[Task] = []
     
+    def __init__(self, kernel=None):
+        super().__init__()
+        self.kernel = kernel
+        self.llm = ChatOpenAI(async_client=self.kernel)
+        
     def _create_agents(self) -> None:
         self.agents = []
         for crew in settings.crew:
@@ -21,7 +29,7 @@ class CrewAIPlugin(BaseModel):
                     goal=crew.goal, 
                     backstory=crew.backstory, 
                     allow_delegation=True, 
-                    llm=self.kernel, 
+                    llm=self.llm, 
                     verbose=True
                 )
             )
@@ -39,7 +47,7 @@ class CrewAIPlugin(BaseModel):
         self._crew = Crew(
             agents=self.agents,
             tasks=self.tasks,
-            manager_llm=self.kernel,
+            manager_llm=self.llm,
             process=Process.hierarchical,
             verbose=2
         )
