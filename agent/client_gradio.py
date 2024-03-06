@@ -411,7 +411,7 @@ with gr.Blocks(fill_height=True) as demo:
                 all_crew =[]
                 for crew_num, crew in enumerate(settings.crew):
                     all_crew.append(render_crew(crew_num, crew))
-                for new_crew_num in range(crew_num+1, 5):
+                for new_crew_num in range(len(all_crew), 5):
                     all_crew.append(render_crew(new_crew_num, AgentModel(role='', goal='', backstory='')))
                 
 
