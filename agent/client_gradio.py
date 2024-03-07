@@ -187,6 +187,9 @@ class Agent(BaseModel):
                 deployment_name=settings.openai_deployment_name, 
                 org_id=settings.openai_org_id
             ).openai()
+            # Break into max(4096) character chunks here, split by word
+            if len(payload) > 4096:
+                payload = "Sorry, this text was too long, you'll have to read it instead"
             response = client.audio.speech.create(model='tts-1', voice='nova', input=payload)
             retval = (None, b''.join(response.iter_bytes()))
             return retval
