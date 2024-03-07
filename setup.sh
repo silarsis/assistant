@@ -27,19 +27,23 @@ if ! python --version > /dev/null 2>&1; then
     exit 1
 fi
 
-# Clone the repository
-if ! git clone $repo_url; then
-    echo "Failed to clone the repository. Please check the URL and try again."
-    exit 1
+# Clone the repository if it doesn't exist
+if [ ! -d "$dir_name" ]; then
+    if ! git clone $repo_url; then
+        echo "Failed to clone the repository. Please check the URL and try again."
+        exit 1
+    fi
 fi
 
 # Change to the directory
 cd $dir_name || exit
 
-# Create the virtual environment
-if ! python -m venv create $venv_name; then
-    echo "Failed to create the virtual environment. Please check your Python installation and try again."
-    exit 1
+# Create the virtual environment if it doesn't exist
+if [ ! -d "$venv_name" ]; then
+    if ! python -m venv $venv_name; then
+        echo "Failed to create the virtual environment. Please check your Python installation and try again."
+        exit 1
+    fi
 fi
 
 # Activate the virtual environment
@@ -51,10 +55,12 @@ if ! pip --version > /dev/null 2>&1; then
     exit 1
 fi
 
-# Install the requirements
-if ! python -m pip install -U --upgrade-strategy eager --force-reinstall -r $requirements_file; then
-    echo "Failed to install the requirements. Please check the requirements file and try again."
-    exit 1
+# Install the requirements if they are not already installed
+if ! pip freeze | grep -q -f $requirements_file; then
+    if ! python -m pip install -U --upgrade-strategy eager --force-reinstall -r $requirements_file; then
+        echo "Failed to install the requirements. Please check the requirements file and try again."
+        exit 1
+    fi
 fi
 
 # Change to the agent directory
