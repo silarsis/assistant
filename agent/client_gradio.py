@@ -407,7 +407,7 @@ with gr.Blocks(fill_height=True) as demo:
                     audio.start_recording(lambda x:None, [audio_state], [audio_state]) # This wipes the audio_state at the start of listening
                     audio.stop_recording(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
             with gr.Tab('Character'):
-                char = gr.Textbox(agent._character, show_copy_button=True, lines=5)
+                char = gr.Textbox(agent._character, show_copy_button=True, lines=15)
                 char_btn = gr.Button("Update")
                 char_btn.click(agent.update_character, [char], [char])
             with gr.Tab('Crew') as crew_tab:
