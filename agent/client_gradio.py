@@ -249,6 +249,9 @@ class Agent(BaseModel):
         response = self._agent.update_google_docs_token(self._google_credentials)
         return response.mesg
     
+    def list_plugins(self):
+        return self._agent.list_plugins()
+    
     def update_api_keys(self, api_type: str, api_key: str, api_base: str, deployment_name: str, org_id: str) -> str:
         settings.openai_api_type = api_type
         settings.openai_api_key = api_key
@@ -416,7 +419,10 @@ with gr.Blocks(fill_height=True) as demo:
                     all_crew.append(render_crew(crew_num, crew))
                 for new_crew_num in range(len(all_crew), 5):
                     all_crew.append(render_crew(new_crew_num, AgentModel(role='', goal='', backstory='')))
-                
+            with gr.Tab('Tools'):
+                for p in agent.list_plugins():
+                    with gr.Row():
+                        gr.Checkbox(value=p.name, label=p.name)
 
 demo.queue()
 if __name__ == '__main__':

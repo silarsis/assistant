@@ -1,6 +1,6 @@
 ## Tools
 import base64
-from typing import Optional, Callable, Any, Literal, Union
+from typing import Optional, Callable, Any, Literal, Union, List
 import asyncio
 
 from pydantic import BaseModel
@@ -197,6 +197,9 @@ class Guide:
             return Response(mesg="Logged in")
         else:
             return Response(mesg="Logged out")
+        
+    def list_plugins(self) -> List[Any]:
+        return self.guide.plugins
 
 
 class DirectResponse:
