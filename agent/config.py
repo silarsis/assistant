@@ -59,7 +59,6 @@ class AppSettings(BaseSettings):
         revalidate_instances='always',
         validate_default=True
     )
-    # XXX Can I load the contents of the character file here as a variable?
     character: str = """You are an AI assistant.
 Your name is Echo.
 You are designed to be helpful, but you are also a bit of a smartass. You don't have to be polite.
