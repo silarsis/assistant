@@ -30,7 +30,7 @@ class GoogleDocLoaderPlugin(BaseModel):
         # I think I really want to cache the results of these summarise calls
         self._summarize_prompt = self.kernel.create_function_from_prompt(
             function_name="summarize_gdoc", plugin_name="gdocs", 
-            description="Summarize a google document (only works for google docs)",
+            description="Summarize a document",
             prompt="Write a short summary of the following. Do not add any details that are not already there, and if you cannot summarise simply say 'no summary': {{$content}}", 
             max_tokens=2000, temperature=0.2, top_p=0.5)
         self.kernel.register_function_from_method('gdocs', self.load_doc)
