@@ -105,7 +105,6 @@ class Guide:
             plan = await self.planner.create_plan(goal=goal)
             if hear_thoughts:
                 thought = str([(step.name, step.parameters) for step in plan.steps])
-                # thought = '\n'.join([f"{step.name} : {step.parameters}" for step in plan.steps])
                 await callback(Thought(mesg=f"Planning result:\n{thought}\n"))
             result = await plan.invoke(self.guide)
         except PlannerException as e:
