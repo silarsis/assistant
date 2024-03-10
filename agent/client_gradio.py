@@ -404,13 +404,15 @@ with gr.Blocks(fill_height=True) as demo:
                 chatbot = gr.Chatbot(agent.get_history_for_chatbot, bubble_full_width=False, show_copy_button=True)
                 with gr.Row():
                     txt = gr.Textbox(
-                        scale=4,
+                        scale=8,
                         show_label=False,
                         placeholder="Enter text and press enter",
                         container=False,
                     )
                     txt.submit(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
-                    btn = gr.UploadButton("📁", type="filepath")
+                    submit_btn = gr.Button("▶️", scale=1)
+                    submit_btn.click(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
+                    btn = gr.UploadButton("📁", type="filepath", scale=1)
                     btn.upload(agent.process_file_input, [btn, chatbot], [chatbot, wav_speaker, mp3_speaker])
                 with gr.Row():
                     audio_state = gr.State()
@@ -430,8 +432,9 @@ with gr.Blocks(fill_height=True) as demo:
                     all_crew.append(render_crew(new_crew_num, AgentModel(role='', goal='', backstory='')))
             with gr.Tab('Tools'):
                 for p in agent.list_plugins():
-                    with gr.Row():
-                        gr.Checkbox(value=p.name, label=p.name)
+                    with gr.Accordion(p.name, open=False):
+                        for f in p.functions:
+                            gr.Checkbox(value=True, label=f"{p.name}.{f}", interactive=True)
 
 demo.queue()
 if __name__ == '__main__':
