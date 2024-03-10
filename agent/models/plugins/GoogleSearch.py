@@ -1,5 +1,3 @@
-import os
-
 from pydantic import BaseModel
 from semantic_kernel.functions.kernel_function_decorator import kernel_function
 
@@ -13,7 +11,11 @@ class GoogleSearchPlugin(BaseModel):
         """Use the Google Search API to search for and return results for the given query"""
         if settings.google_api_key:
             search = GoogleSearchAPIWrapper()
-            results = search.run(query)
+            results = search.results(query, 10)
         else:
             results = "No Google API key found. Please set the GOOGLE_API_KEY environment variable."
+        self._convert_results_to_response(results)
         return str(results)
+    
+    def _convert_results_to_response(self, results: dict) -> str:
+        return '\n'.join([item['snippet'] for item in results]) + '\n\nREFERENCES:\n' + '\n'.join([item['link'] for item in results])

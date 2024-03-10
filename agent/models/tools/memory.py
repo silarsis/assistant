@@ -9,7 +9,7 @@ import semantic_kernel as sk
 from semantic_kernel.prompt_template.input_variable import InputVariable
 
 
-class SummariseResponse:
+class SummariseConversation:
     "Designed to summarise a conversation history"
 
     prompt = """
@@ -39,9 +39,9 @@ Summary: """
             execution_settings=req_settings
         )
         self.chat_fn = self.kernel.create_function_from_prompt(
-            function_name="summarise_response", 
-            plugin_name="summarise_response",
-            description="Summarise a conversation",
+            function_name="summarise_conversation", 
+            plugin_name="memory",
+            description="Summarise a conversation for an ongoing rolling memory, only used by the memory plugin",
             prompt_template_config=self.prompt_template_config
         )
 
@@ -69,7 +69,7 @@ Summary:
         self.context = {}
         self.messages = {}
         self.kernel = kernel
-        self.summariser = SummariseResponse(kernel, service_id=service_id)
+        self.summariser = SummariseConversation(kernel, service_id=service_id)
         
     def refresh_from(self, session_id: str) -> None:
         self.load(session_id)

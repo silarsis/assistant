@@ -29,7 +29,7 @@ class GoogleDocLoaderPlugin(BaseModel):
         # self._embeddings = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
         # I think I really want to cache the results of these summarise calls
         self._summarize_prompt = self.kernel.create_function_from_prompt(
-            function_name="summarize", plugin_name="gdocs", 
+            function_name="summarize_gdoc", plugin_name="gdocs", 
             description="Summarize a google document (only works for google docs)",
             prompt="Write a short summary of the following. Do not add any details that are not already there, and if you cannot summarise simply say 'no summary': {{$content}}", 
             max_tokens=2000, temperature=0.2, top_p=0.5)
@@ -126,7 +126,7 @@ class GoogleDocLoaderPlugin(BaseModel):
             summaries.append(await _summarize(block.strip()))
         return await _summarize("\n".join(summaries))
 
-    @kernel_function(name="load_doc", description="Load a google document into the vector store")
+    @kernel_function(name="load_gdoc", description="Load a google document into the vector store")
     async def load_doc(self, docid: Annotated[str, "The google document ID"] = "") -> str:
         " Load a google document into the vector store "
         if not self._credentials:
