@@ -87,7 +87,7 @@ class ImageGenerationPlugin(BaseModel):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-    @kernel_function()
+    @kernel_function(name="gen_image", description="Generate an image from a description")
     def gen_image(self, description: Annotated[str, "The image description"] = "") -> str:
         " Generate an image from a description "
         client = LLMConnect(

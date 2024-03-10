@@ -10,7 +10,7 @@ class WolframAlphaPlugin(BaseModel):
     wolfram_client: Optional[Any] = None
     wolfram_alpha_appid: Optional[str] = None
         
-    @kernel_function()
+    @kernel_function(name="wolfram", description="Query Wolfram Alpha")
     def wolfram(self, query: Annotated[str, "The query to send to Wolfram Alpha"]) -> str:
         " Query Wolfram Alpha "
         if not self.wolfram_client:

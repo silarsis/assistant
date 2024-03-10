@@ -122,7 +122,7 @@ class Agent(BaseModel):
             # Assigned to a variable to keep it in scope so the task doesn't get deleted too early
             prompt_task = tg.create_task(
                 self._agent.prompt_file_with_callback(
-                    filename, callback=recvQ.put, session_id=self.session_id, hear_thoughts=False), name="prompt")
+                    filename, callback=recvQ.put, session_id=self.session_id, hear_thoughts=settings.hear_thoughts), name="prompt")
             history[-1][1] = ''
             while response := await recvQ.get():
                 history[-1][1] += response.mesg
@@ -138,7 +138,7 @@ class Agent(BaseModel):
             # Assigned to a variable to keep it in scope so the task doesn't get deleted too early
             prompt_task = tg.create_task(
                 self._agent.prompt_with_callback(
-                    input, callback=recvQ.put, session_id=self.session_id, hear_thoughts=False), name="prompt")
+                    input, callback=recvQ.put, session_id=self.session_id, hear_thoughts=settings.hear_thoughts), name="prompt")
             history[-1][1] = ''
             while response := await recvQ.get():
                 history[-1][1] += response.mesg
@@ -316,6 +316,12 @@ class Agent(BaseModel):
         else:
             settings.crew[crew_num] = crew
         settings.save()
+        return crew_num, role, goal, backstory
+        
+    def update_client_settings(self, hear_thoughts: bool) -> bool:
+        settings.hear_thoughts = hear_thoughts
+        settings.save()
+        return hear_thoughts
 
 def render_crew(crew_num: int, crew: AgentModel, render: bool = True) -> gr.Accordion:
     with gr.Accordion(f"Crewmember role: {crew.role or 'New'}", open=False, render=render) as crew_member:
@@ -326,7 +332,7 @@ def render_crew(crew_num: int, crew: AgentModel, render: bool = True) -> gr.Acco
             gr.Textbox(label='Backstory', value=crew.backstory)
         ]
         update_button = gr.Button("Update")
-        update_button.click(agent.update_crew_settings, crew_settings)
+        update_button.click(agent.update_crew_settings, crew_settings, crew_settings)
     return crew_member
 
 agent = Agent(character=settings.character)
@@ -336,13 +342,16 @@ with gr.Blocks(fill_height=True) as demo:
     with gr.Row():
         with gr.Column(scale=2):
             with gr.Accordion("Settings", open=True):
-                with gr.Row():
-                    with gr.Column(scale=4):
+                with gr.Accordion("Client Settings", open=False):
+                    with gr.Row():
                         google_login_button = gr.Button("Google Login")
                         google_login_button.click(agent.google_login, [google_login_button], [google_login_button])
-                    with gr.Column(scale=1):
+                    with gr.Row():
                         sesid = gr.Textbox(label="Session ID", value=DEFAULT_SESSION_ID)
                         sesid.change(agent.update_session_id, [sesid], [sesid])
+                    with gr.Row():
+                        hear_thoughts = gr.Checkbox(label="Hear Thoughts", value=settings.hear_thoughts, interactive=True)
+                        hear_thoughts.change(agent.update_client_settings, [hear_thoughts], [hear_thoughts])
                 with gr.Accordion("Speech", open=False):
                     speech_engine = gr.Dropdown(["None", "ElevenLabs", "OpenAI", "TTS"], label="Speech Engine", value=settings.voice, interactive=True)
                     with gr.Row():

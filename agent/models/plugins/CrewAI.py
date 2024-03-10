@@ -69,7 +69,7 @@ class CrewAIPlugin(BaseModel):
             verbose=2
         )
     
-    @kernel_function()
+    @kernel_function(name="ask_crew", description="Ask a crew to undertake a task")
     def ask_crew(self, task: Annotated[str, "The task to undertake"], outcome: Annotated[str, "The expected outcome of the task"]) -> str:
         " Ask a crew to undertake a task "
         self._create_task(task, outcome)

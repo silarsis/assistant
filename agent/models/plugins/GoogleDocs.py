@@ -30,9 +30,10 @@ class GoogleDocLoaderPlugin(BaseModel):
         # I think I really want to cache the results of these summarise calls
         self._summarize_prompt = self.kernel.create_function_from_prompt(
             function_name="summarize", plugin_name="gdocs", 
-            description="Summarize a document",
+            description="Summarize a google document (only works for google docs)",
             prompt="Write a short summary of the following. Do not add any details that are not already there, and if you cannot summarise simply say 'no summary': {{$content}}", 
             max_tokens=2000, temperature=0.2, top_p=0.5)
+        self.kernel.register_function_from_method('gdocs', self.load_doc)
         self._connect_to_local_chromadb()
         
     def _connect_to_local_chromadb(self):
@@ -125,7 +126,7 @@ class GoogleDocLoaderPlugin(BaseModel):
             summaries.append(await _summarize(block.strip()))
         return await _summarize("\n".join(summaries))
 
-    @kernel_function()
+    @kernel_function(name="load_doc", description="Load a google document into the vector store")
     async def load_doc(self, docid: Annotated[str, "The google document ID"] = "") -> str:
         " Load a google document into the vector store "
         if not self._credentials:

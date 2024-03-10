@@ -80,9 +80,8 @@ class Guide:
 
     def _setup_planner(self):
         print("Setting up the planner and plugins")
-        # self.guide.import_plugin(ScrapeTextPlugin, "ScrapeText")
         self._google_docs = GoogleDocLoaderPlugin(kernel=self.guide)
-        self.guide.import_plugin_from_object(self._google_docs, "gdoc")
+        #self.guide.import_plugin_from_object(self._google_docs, "gdocs")
         if settings.wolfram_alpha_appid:
             self.guide.import_plugin_from_object(WolframAlphaPlugin(wolfram_alpha_appid=settings.wolfram_alpha_appid), "wolfram")
         self.guide.import_plugin_from_object(MathPlugin(), "math")
@@ -105,8 +104,9 @@ class Guide:
         try:
             plan = await self.planner.create_plan(goal=goal)
             if hear_thoughts:
-                thought = '\n'.join([f"{step.description} : {step._state.__dict__}" for step in plan._steps])
-                await callback(Thought(mesg=f"Planning result:\n{thought}"))
+                thought = str([(step.name, step.parameters) for step in plan.steps])
+                # thought = '\n'.join([f"{step.name} : {step.parameters}" for step in plan.steps])
+                await callback(Thought(mesg=f"Planning result:\n{thought}\n"))
             result = await plan.invoke(self.guide)
         except PlannerException as e:
             try:

@@ -109,6 +109,9 @@ Always check the context and chat history first to see if you know an answer.
     elevenlabs_voice_1_id: str = ""
     elevenlabs_voice_2_id: str = ""
     
+    # Client settings
+    hear_thoughts: bool = False
+    
     # Other Miscellaneous API keys, perhaps we need a generic way to store these?
     # Wolfram Alpha API Key
     wolfram_alpha_appid: Optional[str] = None
@@ -147,6 +150,7 @@ Always check the context and chat history first to see if you know an answer.
         )
 
     def save(self):
+        print("Saving Settings")
         with open('.env.json', 'w') as f:
             f.write(json.dumps(self.model_dump(mode='json', exclude=['presto_password'])))
     

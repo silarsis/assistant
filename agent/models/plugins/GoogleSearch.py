@@ -8,7 +8,7 @@ from langchain_community.utilities import GoogleSearchAPIWrapper
 from config import settings
 
 class GoogleSearchPlugin(BaseModel):
-    @kernel_function(description="Scrape text from a website", name="search")
+    @kernel_function(description="Use google search API to return answers for a query, takes a query and returns the scraped text from relevant websites", name="search")
     async def search(self, query: str) -> str:
         """Use the Google Search API to search for and return results for the given query"""
         if settings.google_api_key:
