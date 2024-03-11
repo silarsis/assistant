@@ -123,7 +123,7 @@ class Agent(BaseModel):
             prompt_task = tg.create_task(
                 self._agent.prompt_file_with_callback(
                     filename, callback=recvQ.put, session_id=self.session_id, hear_thoughts=settings.hear_thoughts), name="prompt")
-            history[-1][1] = ''
+            history[-1] = (filename, "")
             while response := await recvQ.get():
                 history[-1][1] += response.mesg
                 yield([history] + list(self.speak(response.mesg)))
