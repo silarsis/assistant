@@ -22,10 +22,15 @@ class LLMConnect(BaseModel):
     deployment_name: str = "gpt-4"
     org_id: Optional[str] = None
     
-    def langchain(self) -> Union[ChatOpenAI,AzureChatOpenAI]:
+    def langchain(self) -> Union[ChatOpenAI, AzureChatOpenAI]:
         " Connect via Langchain "
         if self.api_type == 'azure':
-            llm = AzureChatOpenAI(client=self.openai(), model=self.deployment_name)
+            llm = AzureChatOpenAI(
+                api_key=self.api_key,
+                api_version=self.api_version,
+                organization=self.org_id,
+                base_url=self.api_base,
+                model=self.deployment_name)
         else:
             llm = ChatOpenAI(client=self.openai(), model=self.deployment_name)
         return llm
@@ -33,7 +38,7 @@ class LLMConnect(BaseModel):
     def sk(self, service_id: str='default') -> Tuple[str, Union[AzureChatCompletion, OpenAIChatCompletion]]:
         " Connect via Semantic Kernel "
         if self.api_type == "azure":
-            client = AsyncAzureOpenAI(api_key=self.api_key, organization=self.org_id, base_url=self.api_base)
+            client = AsyncAzureOpenAI(api_key=self.api_key, organization=self.org_id, base_url=self.api_base, api_version=self.api_version)
             service = AzureChatCompletion(self.deployment_name, async_client=client, service_id=service_id)
         else:
             client = AsyncOpenAI(api_key=self.api_key, organization=self.org_id, base_url=self.api_base)
@@ -43,7 +48,6 @@ class LLMConnect(BaseModel):
     def openai(self) -> Union[AzureOpenAI, OpenAI]:
         " Connect via the base OpenAI "
         if self.api_type == 'azure':
-            # gets the API Key from environment variable AZURE_OPENAI_API_KEY
             client = AzureOpenAI(
                 api_key=self.api_key,
                 api_version=self.api_version,
