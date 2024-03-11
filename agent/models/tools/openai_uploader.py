@@ -1,10 +1,11 @@
 import base64
 import requests
+import json
 
 from config import settings
 
 
-def upload_image(image_path):
+def upload_image(image_path: str) -> str:
     # Getting the base64 string
     with open(image_path, "rb") as image_file:
         base64_image = base64.b64encode(image_file.read()).decode('utf-8')
@@ -22,7 +23,7 @@ def upload_image(image_path):
         "content": [
             {
             "type": "text",
-            "text": "Please describe this image"
+            "text": "Please describe this image in as much detail as necessary to be able to accurately recreate it from just the description. If this is a diagram, be sure to capture all aspects of the diagram. If it's a picture, be as descriptive as possible."
             },
             {
             "type": "image_url",
@@ -42,4 +43,4 @@ def upload_image(image_path):
         return response.json()['choices'][0]['message']
     except (IndexError, KeyError) as e:
         print(f"Error uploading image: {e}")
-        return response
+        return json.loads(response.text)['error']['message']
