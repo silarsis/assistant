@@ -3,11 +3,6 @@
 # per-container env files in place as well, but it's easiest to edit them
 # here as some apply to multiple containers.
 
-# Use the local motorhead for memory - alternately, set this to 'local'
-# and comment out motorhead from the docker-compose file to do in-process
-# memory in the agent.
-MEMORY=motorhead
-
 # OpenAI API keys
 # Type can be openai or azure - azure also requires the base and version to be set
 OPENAI_API_TYPE=openai

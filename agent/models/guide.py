@@ -2,7 +2,7 @@
 import base64
 from typing import Optional, Callable, Any, Literal, Union, List
 import asyncio
-import json
+import time
 
 from pydantic import BaseModel
 
@@ -206,6 +206,7 @@ class DirectResponse:
     "Designed to answer a question directly"
 
     prompt = """
+Time: {{$time}}
 
 Use the following format for your answers:
 
@@ -232,6 +233,7 @@ Answer: """
             template=character + self.prompt, 
             name="direct_response", 
             input_variables=[
+                InputVariable(name="time", description="The current time", required=True),
                 InputVariable(name="context", description="The context of the conversation", required=True),
                 InputVariable(name="history", description="The chat history", required=True),
                 InputVariable(name="input", description="The input question you must answer", required=True),
@@ -245,13 +247,14 @@ Answer: """
         )
 
     async def response(self, context: str, history: str, input: str, **kwargs) -> Message:
-        result = await self.kernel.invoke(self.chat_fn, context=context, history=history, input=input)
+        result = await self.kernel.invoke(self.chat_fn, context=context, history=history, input=input, time=time.asctime())
         return Thought(mesg=str(result).strip())
 
 class RephraseResponse:
     "Designed to rephrase an answer to match the character's style"
 
     prompt = """
+Time: {{$time}}
 
 You were asked "{{$input}}" and your subordinate helpers suggests the answer to be "{{$answer_mesg}}".
 Please respond to the user with this answer. If your chat history or context suggests a better answer, please use that instead.
@@ -277,6 +280,7 @@ Answer:  """
             template=character + self.prompt, 
             name="rephrase_response", 
             input_variables=[
+                InputVariable(name="time", description="The current time", required=True),
                 InputVariable(name="context", description="The context of the conversation", required=True),
                 InputVariable(name="history", description="The chat history", required=True),
                 InputVariable(name="input", description="The input question you must answer", required=True),
@@ -291,7 +295,7 @@ Answer:  """
         )
 
     async def response(self, context: str, history: str, input: str, answer_mesg: str, **kwargs) -> Message:
-        result = await self.kernel.invoke(self.chat_fn, context=context, history=history, input=input, answer_mesg=answer_mesg)
+        result = await self.kernel.invoke(self.chat_fn, context=context, history=history, input=input, answer_mesg=answer_mesg, time=time.asctime())
         return Thought(mesg=str(result).strip())
 
 class SelectorResponse:

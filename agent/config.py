@@ -89,11 +89,6 @@ Always check the context and chat history first to see if you know an answer.
     # Image upload api key for talking direct to OpenAI
     img_upload_api_key: str = ""
     
-    # Memory type and engine
-    memory: Literal["local", "motorhead"] = "local"
-    # Motorhead for local chat memory
-    motorhead_host: str = "localhost"
-    motorhead_port: str = "8001"
     # ChromaDB for doc storage
     chroma_mode: Optional[Literal["local", "remote"]] = "local"
     chroma_host: Optional[str] = 'localhost'
