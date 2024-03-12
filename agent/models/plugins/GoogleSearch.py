@@ -13,11 +13,13 @@ class GoogleSearchPlugin(BaseModel):
     async def search(self, query: str) -> str:
         """Use the Google Search API to search for and return results for the given query"""
         if settings.google_api_key:
+            print("Searching via API")
             service = build("customsearch", "v1", developerKey=settings.google_api_key)
             cse = service.cse()
             results = cse.list(q=query, cx=settings.google_cse_id, num=MAX_RESULTS).execute().get("items", [])
             formatted_results = '\n'.join([item['snippet'] for item in results]) + '\n\nREFERENCES:\n' + '\n'.join([item['link'] for item in results])
         else: # Fallback to scraping the search results
+            print("Searching via scraping")
             gsearch = GoogleSearch()
             resObj = await gsearch.async_search(query, MAX_RESULTS)
             results = resObj.results
