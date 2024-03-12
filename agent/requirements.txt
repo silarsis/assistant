@@ -34,3 +34,4 @@ crewai[tools]
 markdown
 keyring
 numpy
+search-engine-parser
