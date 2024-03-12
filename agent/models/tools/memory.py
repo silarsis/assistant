@@ -102,7 +102,7 @@ Summary:
         if not contextualise:
             return
         self.messages[session_id] = self.messages[session_id][-10:]
-        response = await self.summariser.response(context=self.context.setdefault(session_id, ""), history="\n".join([message["content"] for message in contextualise]))
+        response = await self.summariser.response(context=self.context.setdefault(session_id, ""), history="\n".join([f"{message['role']}: {message['content']}" for message in contextualise]))
         self.context[session_id] = response
         return response
     

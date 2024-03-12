@@ -9,6 +9,7 @@ import functools
 from io import StringIO
 from markdown import Markdown
 from models.tools.clean_markdown import convert_to_plain_text
+import json
 
 from urllib.parse import quote
 
@@ -335,6 +336,26 @@ def render_crew(crew_num: int, crew: AgentModel, render: bool = True) -> gr.Acco
         update_button.click(agent.update_crew_settings, crew_settings, crew_settings)
     return crew_member
 
+async def generate_crew(goal: str = "", *crew_fields) -> List[str]:
+    if goal:
+        # Call the LLM to generate the crew, parse the results and create each of the crew members
+        crew = await agent._agent.generate_crew(goal)
+        try:
+            new_crew = json.loads(str(crew))['crew']
+        except:
+            new_crew = []
+        new_crew.append(AgentModel(role='', goal='', backstory=''))
+        crew_fields = list(crew_fields)
+        for crew_num, fields in enumerate(range(0, len(crew_fields), 3)):
+            if crew_num >= len(new_crew):
+                new_crew.append(AgentModel(role='', goal='', backstory=''))
+            crew_fields[fields] = new_crew[crew_num]['role']
+            crew_fields[fields+1] = new_crew[crew_num]['goal']
+            crew_fields[fields+2] = new_crew[crew_num]['backstory']
+            agent.update_crew_settings(crew_num, new_crew[crew_num]['role'], new_crew[crew_num]['goal'], new_crew[crew_num]['backstory'])
+        settings.save()
+        return crew_fields
+
 agent = Agent(character=settings.character)
 
 with gr.Blocks(fill_height=True) as demo:
@@ -426,10 +447,15 @@ with gr.Blocks(fill_height=True) as demo:
                 char_btn.click(agent.update_character, [char], [char])
             with gr.Tab('Crew') as crew_tab:
                 all_crew =[]
+                with gr.Accordion("Generate New Crew", open=False):
+                    gr.Markdown("WARNING: This will remove all existing crew and generate new ones (also does not currently work)")
+                    goal = gr.Textbox(label="What do you need your crew to do?", placeholder="Take a url to a system design and generate a threat model for that system", type="text")
                 for crew_num, crew in enumerate(settings.crew):
                     all_crew.append(render_crew(crew_num, crew))
                 for new_crew_num in range(len(all_crew), 5):
                     all_crew.append(render_crew(new_crew_num, AgentModel(role='', goal='', backstory='')))
+                all_children = [x for c in all_crew for x in c.children[0].children[1:]]
+                goal.submit(generate_crew, [goal] + all_children, all_children)
             with gr.Tab('Tools'):
                 for p in agent.list_plugins():
                     with gr.Accordion(p.name, open=False):

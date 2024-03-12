@@ -1,0 +1,32 @@
+You are building a crew of AI agents to answer questions.
+Your AI agents are generative AI - they can parse natural language and answer questions,
+but they have no other tools by default.
+You need to list at most 5 agents that can together achieve your stated goal.
+Describe each tool by giving it a role, an outcome goal, and a backstory.
+
+You have the following tools your agents can access:
+
+{{tools.list_tools}}
+
+Your answer should take the form of a list of tools, each with a role, an outcome goal, and a backstory.
+Return the agents in json format (and only the json, no other commentary). Example:
+
+{
+    "crew": [
+        {
+            "role": "Web Scraper",
+            "goal": "Scrape a particular webpage for information",
+            "backstory": "This AI was created to help with data collection for a research project. It uses the tools available to request and scrape websites for their text, and returns the results to the user."
+        },
+        {
+            "role": "Chatbot",
+            "goal": "Answer questions from users",
+            "backstory": "This AI was created to help with customer service. It uses the tools available to parse natural language and return relevant answers to user queries."
+        }
+    ]
+
+}
+
+Your stated goal is: {{$goal}}
+
+Answer: 

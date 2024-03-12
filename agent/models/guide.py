@@ -25,6 +25,7 @@ from models.plugins.GoogleSearch import GoogleSearchPlugin
 from models.plugins.ImageGeneration import ImageGenerationPlugin
 from models.plugins.ScrapeText import ScrapeTextPlugin
 from models.plugins.CrewAI import CrewAIPlugin
+from models.plugins.Tools import ToolsPlugin
 from semantic_kernel.core_plugins import MathPlugin, TextPlugin, TimePlugin
 
 from config import settings
@@ -90,6 +91,7 @@ class Guide:
         self.guide.import_plugin_from_object(TextPlugin(), "text")
         self.guide.import_plugin_from_object(ImageGenerationPlugin(), "image_generation")
         self.guide.import_plugin_from_object(ScrapeTextPlugin(), "scrape_text")
+        self.guide.import_plugin_from_object(ToolsPlugin(kernel=self.guide), "tools")
         if settings.google_api_key: # Note this relies on the env variable being set, check this
             self.guide.import_plugin_from_object(GoogleSearchPlugin(), "google_search")
         self.guide.import_plugin_from_object(CrewAIPlugin(kernel=self.guide.get_service(self.service_id).client), "crew_ai")
@@ -98,6 +100,7 @@ class Guide:
             description="Generage code from a specification",
             prompt="You are an expert developer who has a special interest in security.\nGenerate code according to the following specifications:\n{{$input}}", 
             max_tokens=2000, temperature=0.2, top_p=0.5)
+        self.guide.import_plugin_from_prompt_directory("agent/prompts", "precanned")
         self.planner = SequentialPlanner(self.guide, self.service_id)
         print("Planner created")
 
@@ -167,7 +170,7 @@ class Guide:
         history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
         _, response, direct_response = await asyncio.gather(
-            self.memory.add_message(role="Human", content=f"Human: {prompt}", session_id=session_id),
+            self.memory.add_message(role="Human", content=prompt, session_id=session_id),
             self._plan(prompt, callback, history_context, history, hear_thoughts=hear_thoughts),
             self.direct_responder.response(history_context, history, prompt, session_id=session_id)
         )
@@ -176,10 +179,16 @@ class Guide:
         best_response = await self._pick_best_answer(prompt, response, direct_response)
         final_response = Response(mesg=best_response.mesg)
         await asyncio.gather(
-            self.memory.add_message(role="AI", content=f"Response: {best_response.mesg}\n", session_id=session_id),
+            self.memory.add_message(role="AI", content=best_response.mesg, session_id=session_id),
             callback(final_response)
         )
         return None
+    
+    async def generate_crew(self, goal: str) -> List[List[str]]:
+        # Call the CrewAI plugin to generate a crew
+        gen_crew = self.guide.func("precanned", "generate_crew")
+        result = await self.guide.invoke(gen_crew, goal=goal)
+        return result
 
     async def upload_file_with_callback(self, file_data: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> None:
         file = base64.b64decode(file_data)
