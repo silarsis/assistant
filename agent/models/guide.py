@@ -173,10 +173,6 @@ class Guide:
         history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
         response = upload_image(filename)
-        if response.status_code < 200 or response.status_code >= 300:
-            final_response = await self.rephrase("describe this image", Thought(mesg=response), history, history_context, session_id=session_id)
-            await callback(Response(mesg=final_response.mesg), final=True)
-            return
         final_response = await self.rephrase("describe this image", Thought(mesg=response), history, history_context, session_id=session_id)
         await asyncio.gather(
             self.memory.add_message(role="AI", content=f"Response: {final_response.mesg}\n", session_id=session_id),

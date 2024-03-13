@@ -40,7 +40,7 @@ def upload_image(image_path: str) -> str:
     # This should be async
     response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
     try:
-        return response.json()['choices'][0]['message']
+        return response.json()['choices'][0]['message']['content']
     except (IndexError, KeyError) as e:
         print(f"Error uploading image: {e}")
         return json.loads(response.text)['error']['message']
