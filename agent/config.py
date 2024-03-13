@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
-from pydantic.fields import FieldInfo
+from pydantic.fields import FieldInfo, Field
 from pydantic import computed_field, BaseModel
 from pathlib import Path
 import keyring
@@ -74,7 +74,7 @@ Always check the context and chat history first to see if you know an answer.
     # OpenAI/Azure API key and configuration
     openai_api_type: Literal["openai", "azure"] = "openai"
     openai_api_version: str = "2023-06-01-preview"
-    openai_api_key: str = ""
+    openai_api_key: str = Field(min_length=3) # You must have an api key, or nothing else works
     openai_api_base: Optional[str] = None
     openai_deployment_name: str = "gpt-4"
     openai_org_id: Optional[str] = None
