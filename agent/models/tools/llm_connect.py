@@ -3,7 +3,7 @@ from pydantic import BaseModel
 
 from openai import AzureOpenAI, OpenAI
 
-from langchain_openai import AzureChatOpenAI, ChatOpenAI
+from langchain_openai import AzureChatOpenAI, ChatOpenAI, AzureOpenAIEmbeddings, OpenAIEmbeddings
 
 from semantic_kernel.connectors.ai.open_ai.services.azure_chat_completion import AsyncAzureOpenAI
 from semantic_kernel.connectors.ai.open_ai.services.open_ai_chat_completion import AsyncOpenAI
@@ -20,7 +20,25 @@ class LLMConnect(BaseModel):
     api_key: str = ""
     api_version: str = "2023-06-01-preview"
     deployment_name: str = "gpt-4"
+    embedding_name: str = "text-embedding-ada-002"
     org_id: Optional[str] = None
+    
+    def embeddings(self) -> Union[AzureOpenAIEmbeddings, OpenAIEmbeddings]:
+        " Connect to the embeddings "
+        if self.api_type == 'azure':
+            embeddings = AzureOpenAIEmbeddings(
+                api_key=self.api_key,
+                api_version=self.api_version,
+                organization=self.org_id,
+                base_url=self.api_base,
+                model=self.embedding_name)
+        else:
+            embeddings = OpenAIEmbeddings(
+                api_key=self.api_key,
+                organization=self.org_id,
+                base_url=self.api_base,
+                model=self.embedding_name)
+        return embeddings
     
     def langchain(self) -> Union[ChatOpenAI, AzureChatOpenAI]:
         " Connect via Langchain "
@@ -32,7 +50,7 @@ class LLMConnect(BaseModel):
                 base_url=self.api_base,
                 model=self.deployment_name)
         else:
-            llm = ChatOpenAI(client=self.openai(), model=self.deployment_name)
+            llm = ChatOpenAI(client=self.openai(), api_key=self.api_key, model=self.deployment_name) # Need to provide api_key here to stop validator from complaining that it's not set in env
         return llm
     
     def sk(self, service_id: str='default') -> Tuple[str, Union[AzureChatCompletion, OpenAIChatCompletion]]:

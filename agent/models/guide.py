@@ -3,6 +3,7 @@ import base64
 from typing import Optional, Callable, Any, Literal, Union, List
 import asyncio
 import time
+import numpy
 
 from pydantic import BaseModel
 
@@ -17,6 +18,10 @@ import semantic_kernel as sk
 from semantic_kernel.planners.sequential_planner import SequentialPlanner
 from semantic_kernel.prompt_template.input_variable import InputVariable
 from semantic_kernel.exceptions import PlannerException
+from semantic_kernel.memory.semantic_text_memory import SemanticTextMemory
+from semantic_kernel.connectors.memory import chroma
+from chromadb.config import Settings as chroma_settings
+from chromadb.utils import embedding_functions
 
 # from models.plugins.ScrapeText import ScrapeTextPlugin
 from models.plugins.WolframAlpha import WolframAlphaPlugin
@@ -26,7 +31,7 @@ from models.plugins.ImageGeneration import ImageGenerationPlugin
 from models.plugins.ScrapeText import ScrapeTextPlugin
 from models.plugins.CrewAI import CrewAIPlugin
 from models.plugins.Tools import ToolsPlugin
-from semantic_kernel.core_plugins import MathPlugin, TextPlugin, TimePlugin
+from semantic_kernel.core_plugins import MathPlugin, TextPlugin, TimePlugin, TextMemoryPlugin
 
 from config import settings
 
@@ -57,13 +62,14 @@ def getKernel(model: Optional[str] = "") -> sk.Kernel:
     kernel = sk.Kernel()
     if not settings.openai_deployment_name:
         settings.openai_deployment_name = "gpt-4"
-    service_id, service = LLMConnect(
+    llmConnector = LLMConnect(
         api_type=settings.openai_api_type, 
         api_key=settings.openai_api_key, 
         api_base=settings.openai_api_base, 
         deployment_name=settings.openai_deployment_name, 
         org_id=settings.openai_org_id
-    ).sk()
+    )
+    service_id, service = llmConnector.sk()
     kernel.add_service(service)
     return service_id, kernel
 
@@ -101,6 +107,22 @@ class Guide:
             prompt="You are an expert developer who has a special interest in security.\nGenerate code according to the following specifications:\n{{$input}}", 
             max_tokens=2000, temperature=0.2, top_p=0.5)
         self.guide.import_plugin_from_prompt_directory("agent/prompts", "precanned")
+        
+        # memory = SemanticTextMemory(storage=chroma.ChromaMemoryStore(), embeddings_generator=self.guide.get_service(self.service_id).client.embeddings) # Didn't work because I forget why
+        persist_directory='./volumes/chroma/memory'
+        storage = chroma.ChromaMemoryStore(persist_directory=persist_directory, settings=chroma_settings(anonymized_telemetry=False, is_persistent=True, persist_directory=persist_directory))
+        embeddings_generator = embedding_functions.DefaultEmbeddingFunction()
+        # Monkey patch to make the API line up - check if this is needed or not post 0.9.1b1
+        async def call_embeddings_generator(x):
+            return numpy.array(embeddings_generator(x))
+        embeddings_generator.generate_embeddings = call_embeddings_generator
+        if hasattr(storage, '_default_embedding_function'):
+            # storage._default_embedding_function = embeddings_generator
+            storage._default_embedding_function = None
+        # End monkey patching
+        memory = SemanticTextMemory(storage=storage, embeddings_generator=embeddings_generator)
+        self.guide.import_plugin_from_object(TextMemoryPlugin(memory), "TextMemoryPlugin")
+        
         self.planner = SequentialPlanner(self.guide, self.service_id)
         print("Planner created")
 
