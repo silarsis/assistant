@@ -116,7 +116,7 @@ class Agent(BaseModel):
         return [audio_state, text]
     
     async def process_file_input(self, filename: str, history: list[list[str, str]], *args, **kwargs):
-        history.append((filename, "Thinking..."))
+        history.append([filename, "Thinking..."])
         yield([history, None, None])
         recvQ = asyncio.Queue()
         async with asyncio.TaskGroup() as tg:
@@ -124,9 +124,9 @@ class Agent(BaseModel):
             prompt_task = tg.create_task(
                 self._agent.prompt_file_with_callback(
                     filename, callback=recvQ.put, session_id=self.session_id, hear_thoughts=settings.hear_thoughts), name="prompt")
-            history[-1] = (filename, "")
+            history[-1] = [filename, ""]
             while response := await recvQ.get():
-                history[-1][1] += response.mesg
+                history[-1] = [filename, history[-1][1] + response.mesg]
                 yield([history] + list(self.speak(response.mesg)))
                 if response.final: # Could also check here if the task is complete?
                     break
@@ -452,7 +452,7 @@ with gr.Blocks(fill_height=True) as demo:
                     goal = gr.Textbox(label="What do you need your crew to do?", placeholder="Take a url to a system design and generate a threat model for that system", type="text")
                 for crew_num, crew in enumerate(settings.crew):
                     all_crew.append(render_crew(crew_num, crew))
-                for new_crew_num in range(len(all_crew), 5):
+                for new_crew_num in range(len(all_crew), 10):
                     all_crew.append(render_crew(new_crew_num, AgentModel(role='', goal='', backstory='')))
                 all_children = [x for c in all_crew for x in c.children[0].children[1:]]
                 goal.submit(generate_crew, [goal] + all_children, all_children)
