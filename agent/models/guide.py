@@ -98,13 +98,12 @@ class Guide:
         self.guide.import_plugin_from_object(ImageGenerationPlugin(), "image_generation")
         self.guide.import_plugin_from_object(ScrapeTextPlugin(), "scrape_text")
         self.guide.import_plugin_from_object(ToolsPlugin(kernel=self.guide), "tools")
-        if settings.google_api_key: # Note this relies on the env variable being set, check this
-            self.guide.import_plugin_from_object(GoogleSearchPlugin(), "google_search")
-        self.guide.import_plugin_from_object(CrewAIPlugin(kernel=self.guide.get_service(self.service_id).client), "crew_ai")
+        self.guide.import_plugin_from_object(GoogleSearchPlugin(), "google_search")
+        self.guide.import_plugin_from_object(CrewAIPlugin(kernel=self.guide), "crew_ai")
         self.guide.create_function_from_prompt(
             function_name="generate_code", plugin_name="code_generation",
             description="Generage code from a specification",
-            prompt="You are an expert developer who has a special interest in security.\nGenerate code according to the following specifications:\n{{$input}}", 
+            prompt="You are an expert developer who has a special interest in secure code.\nGenerate code according to the following specifications:\n{{$input}}", 
             max_tokens=2000, temperature=0.2, top_p=0.5)
         self.guide.import_plugin_from_prompt_directory("agent/prompts", "precanned")
         
