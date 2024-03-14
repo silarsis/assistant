@@ -15,7 +15,6 @@ RUN /usr/local/bin/python -m pip install --root-user-action=ignore --upgrade pip
 ENV HUGGINGFACE_HUB_CACHE /models/
 
 COPY *.py .
-COPY character.txt .
 COPY models/ ./models/
 # COPY .vscode/launch.json .vscode/launch.json
 
