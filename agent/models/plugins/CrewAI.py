@@ -3,6 +3,7 @@ from typing import Any, List, Annotated, Union
 from config import settings
 
 from crewai import Agent, Task, Crew, Process
+from crewai_tools import BaseTool
 from semantic_kernel.functions.kernel_function_decorator import kernel_function
 
 from models.tools.llm_connect import LLMConnect, AzureChatOpenAI, ChatOpenAI
@@ -21,6 +22,7 @@ for attr in dir(Telemetry):
 ## End monkey patch
 
 class CrewAIPlugin(BaseModel):
+    client: Any = None
     kernel: Any = None
     llm: Union[ChatOpenAI,AzureChatOpenAI] = None
     agents: List[Agent] = []
@@ -29,6 +31,7 @@ class CrewAIPlugin(BaseModel):
     def __init__(self, kernel=None):
         super().__init__()
         self.kernel = kernel
+        self._crew_tools = list(self._tools())
         self.llm = LLMConnect(
             api_type=settings.openai_api_type, 
             api_key=settings.openai_api_key, 
@@ -36,6 +39,21 @@ class CrewAIPlugin(BaseModel):
             deployment_name=settings.openai_deployment_name, 
             org_id=settings.openai_org_id
         ).langchain()
+        
+    def step_callback(self, *args, **kwargs):
+        pass
+        
+    def _tools(self):
+        " Return a list of crewai-usable tools from the semantic_kernel plugins "
+        for plugin in self.kernel.plugins:
+            for function in plugin.functions:
+                class CustomTool(BaseTool):
+                    name: str = function
+                    description: str = plugin.functions[function].description
+                    def _run(self, argument: str) -> str:
+                        return self.kernel.invoke(plugin.functions[function], argument)
+                yield CustomTool
+                
         
     def _create_agents(self) -> None:
         self.agents = []
@@ -46,6 +64,7 @@ class CrewAIPlugin(BaseModel):
                     goal=crew.goal, 
                     backstory=crew.backstory, 
                     allow_delegation=True, 
+                    tools=self._crew_tools,
                     llm=self.llm, 
                     verbose=True
                 )
@@ -61,6 +80,10 @@ class CrewAIPlugin(BaseModel):
     
     def _setup_crew(self) -> None:
         self._create_agents()
+        # if settings.hear_thoughts:
+        #     step_callback = self.step_callback
+        # else:
+        #     step_callback = None
         self._crew = Crew(
             agents=self.agents,
             tasks=self.tasks,
