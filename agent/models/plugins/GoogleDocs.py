@@ -33,7 +33,8 @@ class GoogleDocLoaderPlugin(BaseModel):
             description="Summarize a document",
             prompt="Write a short summary of the following. Do not add any details that are not already there, and if you cannot summarise simply say 'no summary': {{$content}}", 
             max_tokens=2000, temperature=0.2, top_p=0.5)
-        self.kernel.register_function_from_method('gdocs', self.load_doc)
+        self.kernel.register_function_from_method('gdocs', self.load_gdoc)
+        self.kernel.register_function_from_method('gdocs', self.scrape_gdoc)
         self._connect_to_local_chromadb()
         
     def _connect_to_local_chromadb(self):
@@ -105,12 +106,10 @@ class GoogleDocLoaderPlugin(BaseModel):
     
     async def _summarize_elements(self, elements: list, interim: Callable = None) -> str:
         docs = [Document(page_content=t) for t in elements]
-        context = self.kernel.create_new_context()
         summaries = []
         
         async def _summarize(block: str) -> str:
-            context.variables.set('content', block)
-            summarized = await self._summarize_prompt(context=context)
+            summarized = await self.kernel.invoke(self._summarize_prompt, content=block)
             summary = summarized.result
             if interim:
                 interim(summary)
@@ -126,8 +125,8 @@ class GoogleDocLoaderPlugin(BaseModel):
             summaries.append(await _summarize(block.strip()))
         return await _summarize("\n".join(summaries))
 
-    @kernel_function(name="load_gdoc", description="Load a google document into the vector store")
-    async def load_doc(self, docid: Annotated[str, "The google document ID"] = "") -> str:
+    @kernel_function(name="load_gdoc", description="Load a google document into the vector store, ready for future reference. Only use this if you want to commit a document to memory, not if you want to work on the content directly")
+    async def load_gdoc(self, docid: Annotated[str, "The google document ID"] = "") -> str:
         " Load a google document into the vector store "
         if not self._credentials:
             return "Unauthorized, please login"
@@ -142,7 +141,22 @@ class GoogleDocLoaderPlugin(BaseModel):
         # Now summarize the doc
         summarized_doc = await self._summarize_elements(elements, interim=None)
         return f"Document loaded successfully. Document Summary: {summarized_doc}"
+    
+    @kernel_function(name='scrape_gdoc', description='Scrape a google document and return the content')
+    async def scrape_gdoc(self, docid: Annotated[str, "The google document ID"] = "") -> str:
+        " Scrape a google document for text and return all the content "
+        if not self._credentials:
+            return "Unauthorized, please login"
+        if docid.startswith('http'):
+            # Strip the url
+            docid = re.search(r'document/d/([^/]+)/', docid).group(1)
+        elements = self._fetch_from_gdocs(docid, self._credentials)
+        return ''.join(elements)
 
+    @kernel_function(name='search_gdoc', description='Search in a saved gdoc for relevant/similar terms')
+    async def search_gdoc(self, docid: Annotated[str, "The google document ID"] = "") -> str:
+        store = self._vector_store(docid)
+        
     
 # Thought: Instead of databasing the raw text of the doc, why don't we use gdocs as the database,
 # and re-fetch it anytime we need it? Potential for mis-match between vectordb and content for any
