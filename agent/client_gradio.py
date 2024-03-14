@@ -236,8 +236,7 @@ class Agent(BaseModel):
         return audio_stream
     
     def google_login(self, btn: str) -> str:
-        # Gets user credentials for Google OAuth and sends them to the websocket
-        # connection to authorize access to Google Drive and Docs APIs.
+        # Gets user credentials for Google OAuth and sends them to the agent to authorize access to Google Drive and Docs APIs.
         if btn != "Google Login":
             print("Ignoring further button presses")
             return btn
@@ -330,7 +329,7 @@ def render_crew(crew_num: int, crew: AgentModel, render: bool = True) -> gr.Acco
             gr.Number(value=crew_num, visible=False),
             gr.Textbox(label='Role', value=crew.role),
             gr.Textbox(label='Goal', value=crew.goal),
-            gr.Textbox(label='Backstory', value=crew.backstory)
+            gr.Textbox(label='Backstory', value=crew.backstory, lines=5)
         ]
         update_button = gr.Button("Update")
         update_button.click(agent.update_crew_settings, crew_settings, crew_settings)
@@ -344,17 +343,16 @@ async def generate_crew(goal: str = "", *crew_fields) -> List[str]:
             new_crew = json.loads(str(crew))['crew']
         except:
             new_crew = []
-        new_crew.append(AgentModel(role='', goal='', backstory=''))
         crew_fields = list(crew_fields)
         for crew_num, fields in enumerate(range(0, len(crew_fields), 3)):
             if crew_num >= len(new_crew):
-                new_crew.append(AgentModel(role='', goal='', backstory=''))
+                new_crew.append({'role':'', 'goal':'', 'backstory':''})
             crew_fields[fields] = new_crew[crew_num]['role']
             crew_fields[fields+1] = new_crew[crew_num]['goal']
             crew_fields[fields+2] = new_crew[crew_num]['backstory']
             agent.update_crew_settings(crew_num, new_crew[crew_num]['role'], new_crew[crew_num]['goal'], new_crew[crew_num]['backstory'])
         settings.save()
-        return crew_fields
+    return crew_fields
 
 agent = Agent(character=settings.character)
 
@@ -435,12 +433,12 @@ with gr.Blocks(fill_height=True) as demo:
                     submit_btn.click(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
                     btn = gr.UploadButton("📁", type="filepath", scale=1)
                     btn.upload(agent.process_file_input, [btn, chatbot], [chatbot, wav_speaker, mp3_speaker])
-                with gr.Row():
-                    audio_state = gr.State()
-                    audio = gr.Audio(sources="microphone", streaming=True, autoplay=True)
-                    audio.stream(agent.process_audio, [audio_state, audio], [audio_state, txt])
-                    audio.start_recording(lambda x:None, [audio_state], [audio_state]) # This wipes the audio_state at the start of listening
-                    audio.stop_recording(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
+                # with gr.Row():
+                #     audio_state = gr.State()
+                #     audio = gr.Audio(sources="microphone", streaming=True, autoplay=True)
+                #     audio.stream(agent.process_audio, [audio_state, audio], [audio_state, txt])
+                #     audio.start_recording(lambda x:None, [audio_state], [audio_state]) # This wipes the audio_state at the start of listening
+                #     audio.stop_recording(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
             with gr.Tab('Character'):
                 char = gr.Textbox(agent._character, show_copy_button=True, lines=15)
                 char_btn = gr.Button("Update")
@@ -448,7 +446,7 @@ with gr.Blocks(fill_height=True) as demo:
             with gr.Tab('Crew') as crew_tab:
                 all_crew =[]
                 with gr.Accordion("Generate New Crew", open=False):
-                    gr.Markdown("WARNING: This will remove all existing crew and generate new ones (also does not currently work)")
+                    gr.Markdown("WARNING: This will remove all existing crew and generate new ones")
                     goal = gr.Textbox(label="What do you need your crew to do?", placeholder="Take a url to a system design and generate a threat model for that system", type="text")
                 for crew_num, crew in enumerate(settings.crew):
                     all_crew.append(render_crew(crew_num, crew))
