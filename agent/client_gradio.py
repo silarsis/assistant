@@ -1,6 +1,5 @@
 import gradio as gr
 
-import os
 import requests
 import asyncio
 import time
@@ -65,7 +64,7 @@ Markdown.output_formats["plain"] = unmark_element
 
 
 class Agent(BaseModel):
-    _character: str = ""
+    character: str = ""
     _agent: Guide = None
     _audio_model: Any = None
     speech_engine: str = settings.voice
@@ -74,20 +73,11 @@ class Agent(BaseModel):
     settings_block: Any = None
     
     def __init__(self, **kwargs):
-        super().__init__()
-        self._connect(character=kwargs.get('character', None))
+        super().__init__(**kwargs)
+        self._connect()
         
-    def _connect(self, character: str = None):
-        if character:
-            self._character = character
-        else:
-            if os.path.exists('./character.txt'):
-                filename = './character.txt'
-            elif os.path.exists('./agent/character.txt'):
-                filename = './agent/character.txt'
-            with open(filename, 'r') as char_file:
-                self._character = char_file.read()
-        self._agent = Guide(default_character=self._character)
+    def _connect(self):
+        self._agent = Guide(default_character=self.character)
         
     def update_session_id(self, session_id: str) -> str:
         self.session_id = session_id
@@ -258,7 +248,7 @@ class Agent(BaseModel):
         settings.openai_api_base = api_base or None
         settings.openai_deployment_name = deployment_name
         settings.openai_org_id = org_id or None
-        self._connect(character=self._character)
+        self._connect()
         settings.save()
         return [api_type, api_key, api_base, deployment_name, org_id]
     
@@ -276,7 +266,7 @@ class Agent(BaseModel):
         ]
     
     def update_character(self, character: str) -> str:
-        self._character = character
+        self.character = character
         self._connect(character=character)
         return character
     
@@ -440,7 +430,7 @@ with gr.Blocks(fill_height=True) as demo:
                 #     audio.start_recording(lambda x:None, [audio_state], [audio_state]) # This wipes the audio_state at the start of listening
                 #     audio.stop_recording(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
             with gr.Tab('Character'):
-                char = gr.Textbox(agent._character, show_copy_button=True, lines=15)
+                char = gr.Textbox(agent.character, show_copy_button=True, lines=15)
                 char_btn = gr.Button("Update")
                 char_btn.click(agent.update_character, [char], [char])
             with gr.Tab('Crew') as crew_tab:
