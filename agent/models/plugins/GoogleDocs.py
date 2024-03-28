@@ -142,7 +142,7 @@ class GoogleDocLoaderPlugin(BaseModel):
         summarized_doc = await self._summarize_elements(elements, interim=None)
         return f"Document loaded successfully. Document Summary: {summarized_doc}"
     
-    @kernel_function(name='scrape_gdoc', description='Scrape a google document and return the content')
+    @kernel_function(name='scrape_gdoc', description='Input: URL or docid for a google doc. Output: Scraped text of the document in plain text.')
     async def scrape_gdoc(self, docid: Annotated[str, "The google document ID"] = "") -> str:
         " Scrape a google document for text and return all the content "
         if not self._credentials:
