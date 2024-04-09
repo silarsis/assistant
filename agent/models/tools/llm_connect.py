@@ -1,7 +1,7 @@
 from typing import Optional, Literal, Tuple, Union
 from pydantic import BaseModel
 
-from openai import AzureOpenAI, OpenAI
+from openai import AzureOpenAI, OpenAI, AsyncAzureOpenAI, AsyncOpenAI
 
 from langchain_openai import AzureChatOpenAI, ChatOpenAI, AzureOpenAIEmbeddings, OpenAIEmbeddings
 
@@ -63,19 +63,34 @@ class LLMConnect(BaseModel):
             service = OpenAIChatCompletion(self.deployment_name, async_client=client, service_id=service_id)
         return service_id, service
     
-    def openai(self) -> Union[AzureOpenAI, OpenAI]:
+    def openai(self, async_client: bool=False) -> Union[AzureOpenAI, OpenAI]:
         " Connect via the base OpenAI "
         if self.api_type == 'azure':
-            client = AzureOpenAI(
-                api_key=self.api_key,
-                api_version=self.api_version,
-                organization=self.org_id,
-                base_url=self.api_base
-            )
+            if async_client:
+                client = AsyncAzureOpenAI(
+                    api_key=self.api_key,
+                    api_version=self.api_version,
+                    organization=self.org_id,
+                    base_url=self.api_base
+                )
+            else:
+                client = AzureOpenAI(
+                    api_key=self.api_key,
+                    api_version=self.api_version,
+                    organization=self.org_id,
+                    base_url=self.api_base
+                )
         else:
-            client = OpenAI(
-                api_key=self.api_key,
-                organization=self.org_id,
-                base_url=self.api_base,
-            )
+            if async_client:
+                client = AsyncOpenAI(
+                    api_key=self.api_key,
+                    organization=self.org_id,
+                    base_url=self.api_base
+                )
+            else:
+                client = OpenAI(
+                    api_key=self.api_key,
+                    organization=self.org_id,
+                    base_url=self.api_base
+                )
         return client
