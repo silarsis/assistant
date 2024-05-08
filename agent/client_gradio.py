@@ -17,7 +17,6 @@ import google_auth_oauthlib
 import pyaudio
 import wave
 from elevenlabs.client import ElevenLabs
-from elevenlabs.core.api_error import APIError as ElevenLabs_ApiError
 
 from models.tools.llm_connect import LLMConnect
 
@@ -223,7 +222,7 @@ class Agent(BaseModel):
         voices = [settings.elevenlabs_voice_1_id, settings.elevenlabs_voice_2_id]
         try:
             audio_stream = client.generate(text=text, voice=voices[0], stream=True)
-        except ElevenLabs_ApiError as err:
+        except Exception as err:
             print(str(err), flush=True)
         return audio_stream
     
