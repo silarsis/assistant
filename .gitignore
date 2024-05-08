@@ -1,3 +1,4 @@
+agent/volumes/*
 volumes/*
 .data/
 */.env
