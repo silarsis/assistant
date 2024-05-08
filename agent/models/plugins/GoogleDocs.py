@@ -28,13 +28,14 @@ class GoogleDocLoaderPlugin(BaseModel):
         super().__init__(**kwargs)
         # self._embeddings = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
         # I think I really want to cache the results of these summarise calls
-        self._summarize_prompt = self.kernel.create_function_from_prompt(
-            function_name="summarize_gdoc", plugin_name="gdocs", 
+        self._summarize_prompt = self.kernel.add_function(
+            plugin_name="gdocs",
+            function_name="summarize_gdoc", 
             description="Summarize a document",
             prompt="Write a short summary of the following. Do not add any details that are not already there, and if you cannot summarise simply say 'no summary': {{$content}}", 
             max_tokens=2000, temperature=0.2, top_p=0.5)
-        self.kernel.register_function_from_method('gdocs', self.load_gdoc)
-        self.kernel.register_function_from_method('gdocs', self.scrape_gdoc)
+        self.kernel.add_function(plugin_name='gdocs', function=self.load_gdoc)
+        self.kernel.add_function(plugin_name='gdocs', function=self.scrape_gdoc)
         self._connect_to_local_chromadb()
         
     def _connect_to_local_chromadb(self):

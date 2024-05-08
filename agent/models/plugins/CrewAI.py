@@ -9,17 +9,7 @@ from semantic_kernel.functions.kernel_function_decorator import kernel_function
 from models.tools.llm_connect import LLMConnect, AzureChatOpenAI, ChatOpenAI
 
 from pydantic import BaseModel
-
-## Monkey patch telemetry out
-from crewai.telemetry import Telemetry
-
-def noop(*args, **kwargs):
-    pass
-
-for attr in dir(Telemetry):
-    if callable(getattr(Telemetry, attr)) and not attr.startswith("__"):
-        setattr(Telemetry, attr, noop)
-## End monkey patch
+from pydantic.v1 import BaseModel as V1BaseModel
 
 class CrewAIPlugin(BaseModel):
     client: Any = None
@@ -45,13 +35,14 @@ class CrewAIPlugin(BaseModel):
         
     def _tools(self):
         " Return a list of crewai-usable tools from the semantic_kernel plugins "
-        for plugin in self.kernel.plugins:
-            for function in plugin.functions:
+        for plugin_name, plugin in self.kernel.plugins.items():
+            for function_name, function in plugin.functions.items():
                 class CustomTool(BaseTool):
-                    name: str = function
-                    description: str = plugin.functions[function].description
+                    name: str = plugin_name
+                    description: str = function.description
+                    # args_schema: V1BaseModel = {} # XXX need to fix this to map to semantic_kernel args
                     def _run(self, argument: str) -> str:
-                        return self.kernel.invoke(plugin.functions[function], argument)
+                        return self.kernel.invoke(function, argument)
                 yield CustomTool
                 
         

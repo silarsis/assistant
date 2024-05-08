@@ -3,6 +3,8 @@ volumes/*
 */.env
 .env
 .env.json
+agent/.env
+agent/.env.json
 **/*.pyc
 **/.venv/
 credentials.json

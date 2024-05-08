@@ -16,7 +16,8 @@ import google_auth_oauthlib
 
 import pyaudio
 import wave
-import elevenlabs
+from elevenlabs.client import ElevenLabs
+from elevenlabs.core.api_error import APIError as ElevenLabs_ApiError
 
 from models.tools.llm_connect import LLMConnect
 
@@ -46,7 +47,8 @@ if pipeline:
 
 @functools.lru_cache()
 def elevenlabs_voices():
-    return [[voice.name, voice.voice_id] for voice in elevenlabs.voices()]
+    client = ElevenLabs(api_key=settings.elevenlabs_api_key)
+    return [[voice.name, voice.voice_id] for voice in client.voices.get_all().voices]
 
 # From https://stackoverflow.com/questions/761824/python-how-to-convert-markdown-formatted-text-to-text,
 # code to turn markdown into plain text so it can be read nicely
@@ -111,7 +113,7 @@ class Agent(BaseModel):
         recvQ = asyncio.Queue()
         async with asyncio.TaskGroup() as tg:
             # Assigned to a variable to keep it in scope so the task doesn't get deleted too early
-            prompt_task = tg.create_task(
+            _prompt_task = tg.create_task(
                 self._agent.prompt_file_with_callback(
                     filename, callback=recvQ.put, session_id=self.session_id, hear_thoughts=settings.hear_thoughts), name="prompt")
             history[-1] = [filename, ""]
@@ -127,7 +129,7 @@ class Agent(BaseModel):
         recvQ = asyncio.Queue()
         async with asyncio.TaskGroup() as tg:
             # Assigned to a variable to keep it in scope so the task doesn't get deleted too early
-            prompt_task = tg.create_task(
+            _prompt_task = tg.create_task(
                 self._agent.prompt_with_callback(
                     input, callback=recvQ.put, session_id=self.session_id, hear_thoughts=settings.hear_thoughts), name="prompt")
             history[-1][1] = ''
@@ -217,11 +219,11 @@ class Agent(BaseModel):
                 p.terminate()
             
     def elevenlabs_get_stream(self, text: str = '') -> bytes:
-        elevenlabs.set_api_key(settings.elevenlabs_api_key)
+        client = ElevenLabs(api_key=settings.elevenlabs_api_key)
         voices = [settings.elevenlabs_voice_1_id, settings.elevenlabs_voice_2_id]
         try:
-            audio_stream = elevenlabs.generate(text=text, voice=voices[0], stream=True)
-        except elevenlabs.api.error.RateLimitError as err:
+            audio_stream = client.generate(text=text, voice=voices[0], stream=True)
+        except ElevenLabs_ApiError as err:
             print(str(err), flush=True)
         return audio_stream
     
@@ -445,10 +447,15 @@ with gr.Blocks(fill_height=True) as demo:
                 all_children = [x for c in all_crew for x in c.children[0].children[1:]]
                 goal.submit(generate_crew, [goal] + all_children, all_children)
             with gr.Tab('Tools'):
-                for p in agent.list_plugins():
-                    with gr.Accordion(p.name, open=False):
-                        for f in p.functions:
-                            gr.Checkbox(value=True, label=f"{p.name}.{f}", interactive=True)
+                for plugin_name, plugin in agent.list_plugins().items():
+                    with gr.Accordion(plugin_name, open=False):
+                        for f_name in plugin.functions:
+                            gr.Checkbox(value=True, label=f"{plugin_name}.{f_name}", interactive=True)
+            with gr.Tab('Experimental'):
+                gr.Markdown('You are an AI Agent. You are able to reason about text, and also have access to the following tools: * '
+                            + '\n* '.join([f"{plugin_name}.{f_name} - {plugin.functions[f_name].description}" for plugin_name, plugin in agent.list_plugins().items() for f_name in plugin.functions])
+                            + "\n\nGenerate a list of steps for the following task, where each step specifies the input, the tool or tools to be used, and the expected output."
+                            + '\n\nThe task is: Generate a threat model for the system design described at the following URL: <url>')
 
 demo.queue()
 if __name__ == '__main__':

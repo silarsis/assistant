@@ -23,6 +23,7 @@
             "name": "Python:Gradio",
             "type": "debugpy",
             "request": "launch",
+            "cwd": "${workspaceFolder}/agent",
             "windows": {
                 "program": "${workspaceFolder}/.venv/Scripts/gradio.exe"
             },
@@ -33,10 +34,10 @@
                 "program": "${workspaceFolder}/.venv/bin/gradio"
             },
             "args": [
-                "agent/client_gradio.py"
+                "./client_gradio.py"
             ],
             "justMyCode": false,
-            "envFile": "${workspaceFolder}/.env"
+            "envFile": "${workspaceFolder}/agent/.env"
         }
     ]
 }
