@@ -20,6 +20,7 @@ from semantic_kernel.planners.sequential_planner import SequentialPlanner
 from semantic_kernel.prompt_template.input_variable import InputVariable
 from semantic_kernel.exceptions import PlannerException
 from semantic_kernel.memory.semantic_text_memory import SemanticTextMemory
+from semantic_kernel.exceptions.kernel_exceptions import KernelInvokeException
 from semantic_kernel.connectors.memory import chroma
 from chromadb.config import Settings as chroma_settings
 from chromadb.utils import embedding_functions
@@ -159,7 +160,7 @@ class Guide:
     
     async def _pick_best_answer(self, prompt: str, response1: Message, response2: Message) -> Message:
         # Ask the guide which is the better response
-        return Response(mesg="# Planner:\n\n" + response1.mesg + "\n# Direct:\n\n" + response2.mesg) # Temporarily hardcoding to get the long-form response
+        #return Response(mesg="# Planner:\n\n" + response1.mesg + "\n# Direct:\n\n" + response2.mesg) # Temporarily hardcoding to get the long-form response
         result = await self.selector_response.response(prompt=prompt, response1=response1, response2=response2)
         print(result)
         print(f"Response 1: {response1}")
@@ -276,7 +277,10 @@ Answer: """
         )
 
     async def response(self, context: str, history: str, input: str, **kwargs) -> Message:
-        result = await self.kernel.invoke(self.chat_fn, context=context, history=history, input=input, time=time.asctime())
+        try:
+            result = await self.kernel.invoke(self.chat_fn, context=context, history=history, input=input, time=time.asctime())
+        except KernelInvokeException as exc:
+            return Thought(mesg=str(exc) + " - Possible timeout?")
         return Thought(mesg=str(result).strip())
 
 class RephraseResponse:
