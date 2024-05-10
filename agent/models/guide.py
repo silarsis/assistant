@@ -113,6 +113,7 @@ class Guide:
         persist_directory='./volumes/chroma/memory'
         storage = chroma.ChromaMemoryStore(persist_directory=persist_directory, settings=chroma_settings(anonymized_telemetry=False, is_persistent=True, persist_directory=persist_directory))
         embeddings_generator = embedding_functions.DefaultEmbeddingFunction()
+        
         # Monkey patch to make the API line up - check if this is needed or not post 0.9.1b1
         async def call_embeddings_generator(x):
             return numpy.array(embeddings_generator(x))
@@ -121,11 +122,11 @@ class Guide:
             # storage._default_embedding_function = embeddings_generator
             storage._default_embedding_function = None
         # End monkey patching
+        
         memory = SemanticTextMemory(storage=storage, embeddings_generator=embeddings_generator)
         self.guide.add_plugin(TextMemoryPlugin(memory), "TextMemoryPlugin")
         
         self.planner = SequentialPlanner(self.guide, self.service_id)
-        # self.planner = StepwisePlanner(self.guide)
         print("Planner created")
 
     async def _plan(self, goal: str, callback: Callable[[str], None], history_context: str, history: str, session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False) -> Message:
