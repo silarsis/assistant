@@ -15,6 +15,7 @@ from models.tools.llm_connect import LLMConnect
 
 # New semantic kernel setup
 import semantic_kernel as sk
+from semantic_kernel.prompt_template.prompt_template_config import PromptTemplateConfig
 from semantic_kernel.planners.sequential_planner import SequentialPlanner
 from semantic_kernel.prompt_template.input_variable import InputVariable
 from semantic_kernel.exceptions import PlannerException
@@ -89,23 +90,23 @@ class Guide:
     def _setup_planner(self):
         print("Setting up the planner and plugins")
         self._google_docs = GoogleDocLoaderPlugin(kernel=self.guide)
-        #self.guide.import_plugin_from_object(self._google_docs, "gdocs")
+        #self.guide.add_plugin(self._google_docs, "gdocs")
         if settings.wolfram_alpha_appid:
-            self.guide.import_plugin_from_object(WolframAlphaPlugin(wolfram_alpha_appid=settings.wolfram_alpha_appid), "wolfram")
-        self.guide.import_plugin_from_object(MathPlugin(), "math")
-        self.guide.import_plugin_from_object(TimePlugin(), "time")
-        self.guide.import_plugin_from_object(TextPlugin(), "text")
-        self.guide.import_plugin_from_object(ImageGenerationPlugin(), "image_generation")
-        self.guide.import_plugin_from_object(ScrapeTextPlugin(), "scrape_text")
-        self.guide.import_plugin_from_object(ToolsPlugin(kernel=self.guide), "tools")
-        self.guide.import_plugin_from_object(GoogleSearchPlugin(), "google_search")
-        self.guide.import_plugin_from_object(CrewAIPlugin(kernel=self.guide), "crew_ai")
-        self.guide.create_function_from_prompt(
+            self.guide.add_plugin(WolframAlphaPlugin(wolfram_alpha_appid=settings.wolfram_alpha_appid), "wolfram")
+        self.guide.add_plugin(MathPlugin(), "math")
+        self.guide.add_plugin(TimePlugin(), "time")
+        self.guide.add_plugin(TextPlugin(), "text")
+        self.guide.add_plugin(ImageGenerationPlugin(), "image_generation")
+        self.guide.add_plugin(ScrapeTextPlugin(), "scrape_text")
+        self.guide.add_plugin(ToolsPlugin(kernel=self.guide), "tools")
+        self.guide.add_plugin(GoogleSearchPlugin(), "google_search")
+        self.guide.add_plugin(CrewAIPlugin(kernel=self.guide), "crew_ai")
+        self.guide.add_function(
             function_name="generate_code", plugin_name="code_generation",
             description="Generage code from a specification",
             prompt="You are an expert developer who has a special interest in secure code.\nGenerate code according to the following specifications:\n{{$input}}", 
             max_tokens=2000, temperature=0.2, top_p=0.5)
-        self.guide.import_plugin_from_prompt_directory("agent/prompts", "precanned")
+        self.guide.add_plugin(parent_directory="prompts", plugin_name="precanned")
         
         # memory = SemanticTextMemory(storage=chroma.ChromaMemoryStore(), embeddings_generator=self.guide.get_service(self.service_id).client.embeddings) # Didn't work because I forget why
         persist_directory='./volumes/chroma/memory'
@@ -120,18 +121,19 @@ class Guide:
             storage._default_embedding_function = None
         # End monkey patching
         memory = SemanticTextMemory(storage=storage, embeddings_generator=embeddings_generator)
-        self.guide.import_plugin_from_object(TextMemoryPlugin(memory), "TextMemoryPlugin")
+        self.guide.add_plugin(TextMemoryPlugin(memory), "TextMemoryPlugin")
         
         self.planner = SequentialPlanner(self.guide, self.service_id)
+        # self.planner = StepwisePlanner(self.guide)
         print("Planner created")
 
     async def _plan(self, goal: str, callback: Callable[[str], None], history_context: str, history: str, session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False) -> Message:
         try:
-            plan = await self.planner.create_plan(goal=goal)
+            plan = await self.planner.create_plan(goal)
             if hear_thoughts:
                 thought = str([(step.name, step.parameters) for step in plan.steps])
                 await callback(Thought(mesg=f"Planning result:\n{thought}\n"))
-            result = await plan.invoke(self.guide)
+            result = await plan.invoke(kernel=self.guide)
         except PlannerException as e:
             try:
                 if e.args[1].args[0] == 'Not possible to create plan for goal with available functions.\n':
@@ -157,6 +159,7 @@ class Guide:
     
     async def _pick_best_answer(self, prompt: str, response1: Message, response2: Message) -> Message:
         # Ask the guide which is the better response
+        return Response(mesg="# Planner:\n\n" + response1.mesg + "\n# Direct:\n\n" + response2.mesg) # Temporarily hardcoding to get the long-form response
         result = await self.selector_response.response(prompt=prompt, response1=response1, response2=response2)
         print(result)
         print(f"Response 1: {response1}")
@@ -255,7 +258,7 @@ Answer: """
         req_settings.max_tokens = 2000
         req_settings.temperature = 0.2
         req_settings.top_p = 0.5
-        self.prompt_template_config = sk.PromptTemplateConfig(
+        self.prompt_template_config = PromptTemplateConfig(
             template=character + self.prompt, 
             name="direct_response", 
             input_variables=[
@@ -266,7 +269,7 @@ Answer: """
             ],
             execution_settings=req_settings
         )
-        self.chat_fn = self.kernel.create_function_from_prompt(
+        self.chat_fn = self.kernel.add_function(
             function_name="direct_response", plugin_name="direct_response",
             description="Directly answer a question",
             prompt_template_config=self.prompt_template_config
@@ -302,7 +305,7 @@ Answer:  """
         req_settings.max_tokens = 2000
         req_settings.temperature = 0.2
         req_settings.top_p = 0.5
-        self.prompt_template_config = sk.PromptTemplateConfig(
+        self.prompt_template_config = PromptTemplateConfig(
             template=character + self.prompt, 
             name="rephrase_response", 
             input_variables=[
@@ -314,7 +317,7 @@ Answer:  """
             ],
             execution_settings=req_settings
         )
-        self.chat_fn = self.kernel.create_function_from_prompt(
+        self.chat_fn = self.kernel.add_function(
             function_name="rephrase_response", plugin_name="rephrase_response",
             description="Rephrase an answer to match the character's style",
             prompt_template_config=self.prompt_template_config
@@ -331,7 +334,6 @@ class SelectorResponse:
 
 You have been tasked with answering the following: {{$prompt}}.
 Select the most informative response from the following two responses and indicate your selection by sending either 'response 1' or 'response 2'.
-If the responses are factually different, trust the first one more. If the first one is not informative, trust the second one more.
 
 Response 1: {{$response1}}
 Response 2: {{$response2}}
@@ -345,7 +347,7 @@ Answer: """
         req_settings.max_tokens = 2000
         req_settings.temperature = 0.2
         req_settings.top_p = 0.5
-        self.prompt_template_config = sk.PromptTemplateConfig(
+        self.prompt_template_config = PromptTemplateConfig(
             template=character + self.prompt, 
             name="rephrase_response", 
             input_variables=[
@@ -355,7 +357,7 @@ Answer: """
             ],
             execution_settings=req_settings
         )
-        self.chat_fn = self.kernel.create_function_from_prompt(
+        self.chat_fn = self.kernel.add_function(
             function_name="selector_response", plugin_name="selector_response",
             description="Select between responses",
             prompt_template_config=self.prompt_template_config

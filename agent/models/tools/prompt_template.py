@@ -11,7 +11,7 @@ class PromptTemplate:
             return self._prompt_templates[session_id]
         character = self._characters.setdefault(session_id, self.default_character)
         template = self._prompt_template_str.setdefault(session_id, self.default_prompt)
-        self._prompt_templates[session_id] = kernel.create_function_from_prompt(
+        self._prompt_templates[session_id] = kernel.add_function(
             function_name="prompt", plugin_name="prompt",
             description="Prompt the model with a template",
             prompt=character + template, max_tokens=2000, temperature=0.2, top_p=0.5)
