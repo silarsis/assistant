@@ -1,6 +1,6 @@
 {
     "name": "agent",
-    "dockerComposeFile": ["../docker-compose.yml", "../docker-compose-dev.yml"],
+    "dockerComposeFile": ["../docker-compose.yml"],
     "service": "agent",
     "shutdownAction": "none",
     "workspaceFolder": "/app"
