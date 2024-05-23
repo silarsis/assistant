@@ -7,6 +7,8 @@ import numpy
 
 from pydantic import BaseModel
 
+import dspy
+
 # from models.tools import apify
 from models.tools.memory import Memory
 from models.tools.openai_uploader import upload_image
@@ -72,6 +74,7 @@ def getKernel(model: Optional[str] = "") -> sk.Kernel:
         org_id=settings.openai_org_id
     )
     service_id, service = llmConnector.sk()
+    _ = llmConnector.dspy() # Doing this to ensure it's initialised before needed.
     kernel.add_service(service)
     return service_id, kernel
 
@@ -87,7 +90,7 @@ class Guide:
         self.rephrase_responder = RephraseResponse(self.guide, character=self.default_character, service_id=self.service_id)
         self.selector_response = SelectorResponse(self.guide, character=self.default_character, service_id=self.service_id)
         print("Guide initialised")
-
+        
     def _setup_planner(self):
         print("Setting up the planner and plugins")
         self._google_docs = GoogleDocLoaderPlugin(kernel=self.guide)
@@ -159,15 +162,20 @@ class Guide:
         # If so, we could force rephrasing that way.
         return await self.rephrase_responder.response(history_context, history, input, answer.mesg)
     
-    async def _pick_best_answer(self, prompt: str, response1: Message, response2: Message) -> Message:
+    async def _pick_best_answer(self, prompt: str, response1: Message, response2: Message, response3: Message) -> Message:
         # Ask the guide which is the better response
         #return Response(mesg="# Planner:\n\n" + response1.mesg + "\n# Direct:\n\n" + response2.mesg) # Temporarily hardcoding to get the long-form response
-        result = await self.selector_response.response(prompt=prompt, response1=response1, response2=response2)
+        result = await self.selector_response.response(prompt=prompt, response1=response1, response2=response2, response3=response3)
         print(result)
         print(f"Response 1: {response1}")
         print(f"Response 2: {response2}")
+        print(f"Response 3: {response3}")
         if '1' in str(result.mesg):
             return response1
+        if '2' in str(result.mesg):
+            return response2
+        if '3' in str(result.mesg):
+            return response3
         return response2
     
     async def prompt_file_with_callback(self, filename: bytes, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False) -> Message:
@@ -184,6 +192,11 @@ class Guide:
         )
         return None
     
+    async def run_dspy(self, prompt: str):
+        generate_answer = DSPYResponse()
+        pred = generate_answer(question=prompt)
+        return Thought(str(pred))
+    
     async def prompt_with_callback(self, prompt: Union[str,bytes], callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> Message:
         if not prompt:
             await callback(Response(mesg="I'm afraid I don't have enough context to respond. Could you please rephrase your question?", final=True))
@@ -191,14 +204,18 @@ class Guide:
         # Convert the prompt to character + history
         history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
-        _, response, direct_response = await asyncio.gather(
+        _, response, direct_response, dspy_response = await asyncio.gather(
             self.memory.add_message(role="Human", content=prompt, session_id=session_id),
             self._plan(prompt, callback, history_context, history, hear_thoughts=hear_thoughts),
-            self.direct_responder.response(history_context, history, prompt, session_id=session_id)
+            self.direct_responder.response(history_context, history, prompt, session_id=session_id),
+            # presto.Query()(prompt)
+            self.run_dspy(prompt)
         )
         if response:
             response = await self.rephrase(prompt, response, history, history_context, session_id=session_id)
-        best_response = await self._pick_best_answer(prompt, response, direct_response)
+        if dspy_response:
+            dspy_response = await self.rephrase(prompt, dspy_response, history, history_context, session_id=session_id)
+        best_response = await self._pick_best_answer(prompt, response, direct_response, dspy_response)
         final_response = Response(mesg=best_response.mesg)
         await asyncio.gather(
             self.memory.add_message(role="AI", content=best_response.mesg, session_id=session_id),
@@ -338,10 +355,11 @@ class SelectorResponse:
     prompt = """
 
 You have been tasked with answering the following: {{$prompt}}.
-Select the most informative response from the following two responses and indicate your selection by sending either 'response 1' or 'response 2'.
+Select the most informative response from the following responses and indicate your selection by sending either 'response 1' or 'response 2' or 'response 3'.
 
 Response 1: {{$response1}}
 Response 2: {{$response2}}
+Response 3: {{$response3}}
 
 Answer: """
 
@@ -358,7 +376,8 @@ Answer: """
             input_variables=[
                 InputVariable(name="prompt", description="The original question", required=True),
                 InputVariable(name="response1", description="The first response", required=True),
-                InputVariable(name="response2", description="The second response", required=True)
+                InputVariable(name="response2", description="The second response", required=True),
+                InputVariable(name="response3", description="The third response", required=True),
             ],
             execution_settings=req_settings
         )
@@ -368,6 +387,15 @@ Answer: """
             prompt_template_config=self.prompt_template_config
         )
 
-    async def response(self, prompt: str, response1: str, response2: str, **kwargs) -> Message:
-        result = await self.kernel.invoke(self.chat_fn, prompt=prompt, response1=response1, response2=response2)
+    async def response(self, prompt: str, response1: str, response2: str, response3: str, **kwargs) -> Message:
+        result = await self.kernel.invoke(self.chat_fn, prompt=prompt, response1=response1, response2=response2, response3=response3)
         return Thought(mesg=str(result).strip())
+    
+class DSPYResponse(dspy.Module):
+    def __init__(self):
+        super().__init__()
+        self.predict = dspy.ChainOfThought('question -> answer')
+        
+    def forward(self, question: str):
+        pred = self.predict(question=question)
+        return dspy.Prediction(answer=pred.answer)
