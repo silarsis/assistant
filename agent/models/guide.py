@@ -99,7 +99,8 @@ class Guide:
         self.guide.import_plugin_from_object(ScrapeTextPlugin(), "scrape_text")
         self.guide.import_plugin_from_object(ToolsPlugin(kernel=self.guide), "tools")
         self.guide.import_plugin_from_object(GoogleSearchPlugin(), "google_search")
-        self.guide.import_plugin_from_object(CrewAIPlugin(kernel=self.guide), "crew_ai")
+        self.radio = self.guide.import_plugin_from_object(CrewAIPlugin(kernel=self.guide), "crew_ai")
+        self.radioQueue = asyncio.Queue()
         self.guide.create_function_from_prompt(
             function_name="generate_code", plugin_name="code_generation",
             description="Generage code from a specification",
@@ -127,11 +128,15 @@ class Guide:
 
     async def _plan(self, goal: str, callback: Callable[[str], None], history_context: str, history: str, session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False) -> Message:
         try:
-            plan = await self.planner.create_plan(goal=goal)
+            plan = await self.planner.create_plan(goal=goal) # Plan
             if hear_thoughts:
-                thought = str([(step.name, step.parameters) for step in plan.steps])
-                await callback(Thought(mesg=f"Planning result:\n{thought}\n"))
-            result = await plan.invoke(self.guide)
+                if plan.steps[0].name == 'Not possible to create plan for goal with available functions.\n':
+                    thought = plan.steps[0].name
+                    return Thought(mesg=thought)
+                else:
+                    thought = str([(step.name, step.parameters) for step in plan.steps])
+                    await callback(Thought(mesg=f"Planning result:\n{thought}\n"))
+            result = await plan.invoke(self.guide) # Execute
         except PlannerException as e:
             try:
                 if e.args[1].args[0] == 'Not possible to create plan for goal with available functions.\n':
@@ -273,7 +278,11 @@ Answer: """
         )
 
     async def response(self, context: str, history: str, input: str, **kwargs) -> Message:
-        result = await self.kernel.invoke(self.chat_fn, context=context, history=history, input=input, time=time.asctime())
+        try:
+            result = await self.kernel.invoke(self.chat_fn, context=context, history=history, input=input, time=time.asctime())
+        except sk.exceptions.kernel_exceptions.KernelInvokeException as e:
+            print(f"Direct response failed: {e}")
+            return Thought(mesg=str(e))
         return Thought(mesg=str(result).strip())
 
 class RephraseResponse:
@@ -321,7 +330,11 @@ Answer:  """
         )
 
     async def response(self, context: str, history: str, input: str, answer_mesg: str, **kwargs) -> Message:
-        result = await self.kernel.invoke(self.chat_fn, context=context, history=history, input=input, answer_mesg=answer_mesg, time=time.asctime())
+        try:
+            result = await self.kernel.invoke(self.chat_fn, context=context, history=history, input=input, answer_mesg=answer_mesg, time=time.asctime())
+        except sk.exceptions.kernel_exceptions.KernelInvokeException as e:
+            print(f"Rephrase response failed: {e}")
+            return Thought(mesg=str(e)) # Should we just return the original here?
         return Thought(mesg=str(result).strip())
 
 class SelectorResponse:
@@ -362,5 +375,9 @@ Answer: """
         )
 
     async def response(self, prompt: str, response1: str, response2: str, **kwargs) -> Message:
-        result = await self.kernel.invoke(self.chat_fn, prompt=prompt, response1=response1, response2=response2)
+        try:
+            result = await self.kernel.invoke(self.chat_fn, prompt=prompt, response1=response1, response2=response2)
+        except sk.exceptions.kernel_exceptions.KernelInvokeException as e:
+            print(f"Selector response failed: {e}")
+            return Thought(mesg=str(e)) # Should we just return the first one here?
         return Thought(mesg=str(result).strip())

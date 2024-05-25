@@ -5,10 +5,17 @@ import asyncio
 import time
 import re
 import functools
+import hashlib
+import base64
+import random
+import string
 from io import StringIO
 from markdown import Markdown
-from models.tools.clean_markdown import convert_to_plain_text
 import json
+from asyncio import QueueEmpty
+
+from models.tools.clean_markdown import convert_to_plain_text
+from models.tools.radio import AIRadio
 
 from urllib.parse import quote
 
@@ -17,6 +24,7 @@ import google_auth_oauthlib
 import pyaudio
 import wave
 import elevenlabs
+from elevenlabs.client import ElevenLabs
 
 from models.tools.llm_connect import LLMConnect
 
@@ -34,6 +42,38 @@ from numpy.typing import ArrayLike
 
 from config import settings, AgentModel
 
+
+def generate_code_verifier(length=128):
+    """
+    Generates a 'code_verifier' which is a high-entropy cryptographic random STRING using the
+    unreserved characters [A-Z] / [a-z] / [0-9] / "-" / "." / "_" / "~" from Section 2.3 of [RFC3986],
+    with a minimum length of 43 characters and a maximum length of 128 characters.
+    """
+    if settings.spotify_client_verifier: # Cacheing this is probably bad.
+        return settings.spotify_client_verifier
+    token = ''.join(random.choices(string.ascii_letters + string.digits + '_.-~', k=length))
+    settings.spotify_client_verifier = token
+    settings.save()
+    return token
+    # # Generate random bytes and convert them into a base64 URL-encoded string.
+    # token = os.urandom(length)
+    # code_verifier = base64.urlsafe_b64encode(token).decode('utf-8').rstrip('=')
+    # return code_verifier[:length]
+
+def generate_code_challenge(code_verifier):
+    """
+    Generates a 'code_challenge' derived from the code verifier by using SHA256 hashing and then
+    base64 URL-encoding the result. The transformation of the 'code_verifier' to the 'code_challenge'
+    is referred to as code_challenge_method and the method used is S256.
+    """
+    sha256 = hashlib.sha256(code_verifier.encode('ascii')).digest()
+    return base64.urlsafe_b64encode(sha256).decode('ascii').rstrip('=')
+    # # SHA256 hash the code_verifier and then base64 URL-encode the result.
+    # sha256 = hashlib.sha256(code_verifier.encode('utf-8')).digest()
+    # code_challenge = base64.urlsafe_b64encode(sha256).decode('utf-8').rstrip('=')
+    # return code_challenge
+
+
 # def google_logout():
 #     if "_credentials" in st.session_state:
 #         st.session_state._credentials = None
@@ -46,7 +86,7 @@ if pipeline:
 
 @functools.lru_cache()
 def elevenlabs_voices():
-    return [[voice.name, voice.voice_id] for voice in elevenlabs.voices()]
+    return [[voice.name, voice.voice_id] for voice in ElevenLabs(api_key=settings.elevenlabs_api_key).voices.get_all().voices]
 
 # From https://stackoverflow.com/questions/761824/python-how-to-convert-markdown-formatted-text-to-text,
 # code to turn markdown into plain text so it can be read nicely
@@ -71,9 +111,11 @@ class Agent(BaseModel):
     _google_credentials: Any = None
     session_id: str = DEFAULT_SESSION_ID
     settings_block: Any = None
+    _radio: AIRadio = None
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._radio = AIRadio()
         self._connect()
         
     def _connect(self):
@@ -217,10 +259,10 @@ class Agent(BaseModel):
                 p.terminate()
             
     def elevenlabs_get_stream(self, text: str = '') -> bytes:
-        elevenlabs.set_api_key(settings.elevenlabs_api_key)
+        client = ElevenLabs(api_key=settings.elevenlabs_api_key)
         voices = [settings.elevenlabs_voice_1_id, settings.elevenlabs_voice_2_id]
         try:
-            audio_stream = elevenlabs.generate(text=text, voice=voices[0], stream=True)
+            audio_stream = client.generate(text=text, voice=voices[0], stream=True)
         except elevenlabs.api.error.RateLimitError as err:
             print(str(err), flush=True)
         return audio_stream
@@ -312,6 +354,36 @@ class Agent(BaseModel):
         settings.hear_thoughts = hear_thoughts
         settings.save()
         return hear_thoughts
+    
+    def update_radio(self, prompt: str, history: list[list[str, str]]) -> List:
+        history.append([prompt, "Thinking..."])
+        return [prompt, history]
+    
+    async def spotify_login_button(self, code: str, state: str = '') -> str:
+        settings.spotify_client_code = code
+        params = {
+            'grant_type': 'authorization_code',
+            'code': settings.spotify_client_code,
+            'redirect_uri': 'http://localhost:7860/spotify_login',
+            'client_id': settings.spotify_client_id,
+            'code_verifier': settings.spotify_client_verifier
+        }
+        auth_response = requests.post("https://accounts.spotify.com/api/token", params=params, headers={'Content-Type': 'application/x-www-form-urlencoded'})
+        # Shouldn't store these in the config, should go to the spotify tool
+        settings.spotify_access_token = auth_response.json()['access_token']
+        settings.spotify_refresh_token = auth_response.json()['refresh_token']
+        settings.spotify_expiry = auth_response.json()['expires_in'] + time.time() - 5 # 5 seconds before for some buffer
+        return "Logged in - please return to your main page"
+    
+    def play_pause_radio(self, button: str) -> List:
+        if button == "▶️":
+            self._agent._radio.play()
+            button = '⏸️'
+        elif button == "⏸️":
+            self._agent._radio.pause()
+            button = '▶️'
+        return button
+    
 
 def render_crew(crew_num: int, crew: AgentModel, render: bool = True) -> gr.Accordion:
     with gr.Accordion(f"Crewmember role: {crew.role or 'New'}", open=False, render=render) as crew_member:
@@ -346,6 +418,38 @@ async def generate_crew(goal: str = "", *crew_fields) -> List[str]:
 
 agent = Agent(character=settings.character)
 
+def spotify_link():
+    settings.spotify_client_verifier = generate_code_verifier()
+    params = {
+        'client_id': settings.spotify_client_id,
+        'response_type': 'code',
+        'redirect_uri': 'http://localhost:7860/spotify_login',
+        'scope': 'user-modify-playback-state',
+        'code_challenge_method': 'S256',
+        'code_challenge': generate_code_challenge(settings.spotify_client_verifier)
+    }
+    return "https://accounts.spotify.com/authorize?" + requests.compat.urlencode(params)
+
+def setup_spotify_login(button: gr.Button):
+    demo.app.add_api_route('/spotify_login', agent.spotify_login_button, methods=['GET'])
+    
+def radio_tick_mp3(*args, **kwargs):
+    try:
+        if mp3 := agent._radio._mp3_queue.get_nowait():
+            if isinstance(mp3, str):
+                agent.speak(mp3)
+                return None
+            return [mp3]
+    except QueueEmpty:
+        return None
+    
+def radio_tick_wav(*args, **kwargs):
+    try:
+        if wav := agent._radio._wav_queue.get_nowait():
+            return [wav]
+    except QueueEmpty:
+        return None
+
 with gr.Blocks(fill_height=True) as demo:
     agent.settings_block = demo
     with gr.Row():
@@ -355,6 +459,9 @@ with gr.Blocks(fill_height=True) as demo:
                     with gr.Row():
                         google_login_button = gr.Button("Google Login")
                         google_login_button.click(agent.google_login, [google_login_button], [google_login_button])
+                    with gr.Row():
+                        spotify_login_button = gr.Button("Spotify Login", link=spotify_link())
+                        demo.load(setup_spotify_login, inputs=[spotify_login_button])
                     with gr.Row():
                         sesid = gr.Textbox(label="Session ID", value=DEFAULT_SESSION_ID)
                         sesid.change(agent.update_session_id, [sesid], [sesid])
@@ -449,7 +556,20 @@ with gr.Blocks(fill_height=True) as demo:
                     with gr.Accordion(p.name, open=False):
                         for f in p.functions:
                             gr.Checkbox(value=True, label=f"{p.name}.{f}", interactive=True)
+            with gr.Tab('Radio') as radio_tab:
+                textboxes = [
+                    gr.Textbox(label="Prompt", placeholder="80's and 90's greatest hits and influential music", type="text"),
+                    gr.Textbox(label="Announcer Style", placeholder="Casey Kasem's American Top 40", type="text")
+                ]
+                with gr.Row():
+                    wav_radio = gr.Audio(interactive=False, streaming=True, visible=False, format='wav', autoplay=True)#, every=1, value=radio_tick_wav)
+                    mp3_radio = gr.Audio(interactive=False, visible=False, format='mp3', autoplay=True)#, every=1, value=radio_tick_mp3)
+                    radio_update_button = gr.Button("Update", scale=8)
+                    radio_update_button.click(agent._radio.update, textboxes, textboxes)
+                    radio_play_button = gr.Button("▶️", scale=1)
+                    radio_play_button.click(agent._radio.play)
 
 demo.queue()
+
 if __name__ == '__main__':
     demo.launch()

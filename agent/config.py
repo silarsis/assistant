@@ -118,6 +118,13 @@ Always check the context and chat history first to see if you know an answer.
     # PyHive / Presto for internal data access
     presto_host: str = ""
     presto_username: str = ""
+    # Spotify for radio
+    spotify_client_id: str = "afffe002f50944d792eb41d79a5b5a96"
+    spotify_client_verifier: str = ''
+    spotify_client_code: str = ''
+    spotify_access_token: str = ''
+    spotify_refresh_token: str = ''
+    spotify_expiry: int = 0
     
     @computed_field(repr=False)
     def presto_password(self) -> str:
@@ -147,6 +154,6 @@ Always check the context and chat history first to see if you know an answer.
     def save(self):
         print("Saving Settings")
         with open('.env.json', 'w') as f:
-            f.write(json.dumps(self.model_dump(mode='json', exclude=['presto_password'])))
+            f.write(json.dumps(self.model_dump(mode='json', exclude=['presto_password', 'spotify_client_verifier', 'spotify_client_code', 'spotify_access_token', 'spotify_refresh_token', 'spotify_expiry'])))
     
 settings = AppSettings()
