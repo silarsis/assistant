@@ -9,6 +9,7 @@ from semantic_kernel.connectors.ai.open_ai.services.azure_chat_completion import
 from semantic_kernel.connectors.ai.open_ai.services.open_ai_chat_completion import AsyncOpenAI
 from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion, OpenAIChatCompletion
 
+import dspy
 
 class LLMConnect(BaseModel):
     """
@@ -94,3 +95,24 @@ class LLMConnect(BaseModel):
                     base_url=self.api_base
                 )
         return client
+    
+    def dspy(self):
+        " Connect via DSPY "
+        if self.api_type == 'azure':
+            llm = dspy.AzureOpenAI(
+                api_base=self.api_base, 
+                api_version=self.api_version,
+                model=self.deployment_name,
+                api_key=self.api_key,
+                # organization=self.org_id,
+                # base_url=self.api_base
+            )
+        else:
+            llm = dspy.OpenAI(
+                model=self.deployment_name,
+                api_key=self.api_key, 
+                api_base=self.api_base,
+                organization=self.org_id
+            )
+        dspy.settings.configure(lm=llm) # Not multi-LLM safe :(
+        return llm

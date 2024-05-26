@@ -18,3 +18,7 @@ def list_schemas() -> List[str]:
 def list_tables_for_schema(schema: str) -> List[str]:
     cursor.execute(f"show tables from {schema}")
     return cursor.fetchall()
+
+def run_query(query: str) -> str:
+    cursor.execute(query)
+    return cursor.fetchall()

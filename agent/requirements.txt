@@ -35,3 +35,5 @@ markdown
 keyring
 numpy
 search-engine-parser
+dspy-ai
+dspy-ai[milvus]

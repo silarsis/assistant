@@ -3,6 +3,7 @@ import os
 import json
 
 import semantic_kernel as sk
+from semantic_kernel.prompt_template.prompt_template_config import PromptTemplateConfig
 from semantic_kernel.prompt_template.input_variable import InputVariable
 
 
@@ -26,7 +27,7 @@ Summary: """
         req_settings.max_tokens = 2000
         req_settings.temperature = 0.2
         req_settings.top_p = 0.5
-        self.prompt_template_config = sk.PromptTemplateConfig(
+        self.prompt_template_config = PromptTemplateConfig(
             template=self.prompt, 
             name="summarise_conversation", 
             input_variables=[
@@ -35,7 +36,7 @@ Summary: """
             ],
             execution_settings=req_settings
         )
-        self.chat_fn = self.kernel.create_function_from_prompt(
+        self.chat_fn = self.kernel.add_function(
             function_name="summarise_conversation", 
             plugin_name="memory",
             description="Summarise a conversation for an ongoing rolling memory, only used by the memory plugin",

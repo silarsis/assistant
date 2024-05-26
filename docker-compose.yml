@@ -29,3 +29,12 @@ services:
     # entrypoint: python3 TTS/server/server.py --model_name tts_models/en/vctk/vits
     ports:
       - "5002:5002"
+  memory:
+    image: kernelmemory/service
+    container_name: memory
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    ports:
+      - "9001:9001"
+    volumes:
+      - ./appsettings.Development.json:/app/appsettings.Development.json

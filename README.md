@@ -8,13 +8,12 @@ Checkout the source code, cd to the "agent" directory, run `python -m pip instal
 then run `python ./client_gradio.py` to start the agent, and look for the locahost URI printed in the output - you should
 be able to web browse to that.
 
-If you have API keys for various things, you can look at the .env-template files - rename them to .env and add
-keys or configurations as needed. You can find them in each of the sub-directories from the main dir. The critical one
-is the one in the root of the project. Rerun the agent if you change any of these.
+API keys are now entered in the app itself, so once you're running you can fold out the appropriate entries on the sidebar
+and fill them out. Note, without an API key for one of the LLMs (Azure, OpenAI, etc) not much works ;)
 
 If you want to do certain things, you'll need the containers running - we're down to a text-to-speech and a chromadb for the google docs
 plugin. Simply run `docker-compose up -d` and it should run the containers for you - or, if you want to point at a SaaS solution,
-check the .env file. `docker-compose build --no-cache--pull` for building the docker images.
+check the .env file. `docker-compose build --no-cache --pull` for building the docker images.
 
 ## Goals
 
