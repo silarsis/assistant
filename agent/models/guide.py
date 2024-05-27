@@ -142,8 +142,8 @@ class Guide:
             result = await plan.invoke(kernel=self.guide)
         except PlannerException as e:
             try:
-                if e.args[1].args[0] == 'Not possible to create plan for goal with available functions.\n':
-                    return Thought(mesg=e.args[1].args[0])
+                if e.args[0] == 'Not possible to create plan for goal with available functions.\n':
+                    return Thought(mesg=e.args[0])
             except Exception:
                 pass
             print(f"Planning failed: {e}")
@@ -163,21 +163,19 @@ class Guide:
         # If so, we could force rephrasing that way.
         return await self.rephrase_responder.response(history_context, history, input, answer.mesg)
     
-    async def _pick_best_answer(self, prompt: str, response1: Message, response2: Message, response3: Message) -> Message:
+    async def _pick_best_answer(self, prompt: str, responses: List[Message]) -> Message:
         # Ask the guide which is the better response
         #return Response(mesg="# Planner:\n\n" + response1.mesg + "\n# Direct:\n\n" + response2.mesg) # Temporarily hardcoding to get the long-form response
-        result = await self.selector_response.response(prompt=prompt, response1=response1, response2=response2, response3=response3)
-        print(result)
-        print(f"Response 1: {response1}")
-        print(f"Response 2: {response2}")
-        print(f"Response 3: {response3}")
+        result = await self.selector_response.response(prompt=prompt, responses=responses)
+        print(f"{result.mesg} was selected as the best response")
+        print(f"Responses: {responses}")
         if '1' in str(result.mesg):
-            return response1
+            return responses[0]
         if '2' in str(result.mesg):
-            return response2
+            return responses[1]
         if '3' in str(result.mesg):
-            return response3
-        return response2
+            return responses[2]
+        return responses[1]
     
     async def prompt_file_with_callback(self, filename: bytes, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False) -> Message:
         if not filename:
@@ -195,7 +193,11 @@ class Guide:
     
     async def run_dspy(self, prompt: str):
         generate_answer = DSPYResponse()
-        pred = generate_answer(question=prompt)
+        try:
+            pred = generate_answer(question=prompt)
+        except Exception as e:
+            print(f"Failed to run DSPY: {e}")
+            return Thought(mesg=str(e))
         return Thought(str(pred))
     
     async def prompt_with_callback(self, prompt: Union[str,bytes], callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> Message:
@@ -205,18 +207,15 @@ class Guide:
         # Convert the prompt to character + history
         history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
-        _, response, direct_response, dspy_response = await asyncio.gather(
+        def rephrase(response: Message) -> Message:
+            return self.rephrase(prompt, response, history, history_context, session_id=session_id)
+        _, *results = await asyncio.gather(
             self.memory.add_message(role="Human", content=prompt, session_id=session_id),
-            self._plan(prompt, callback, history_context, history, hear_thoughts=hear_thoughts),
-            self.direct_responder.response(history_context, history, prompt, session_id=session_id),
-            # presto.Query()(prompt)
+            rephrase(await self._plan(prompt, callback, history_context, history, hear_thoughts=hear_thoughts)),
+            rephrase(await self.direct_responder.response(history_context, history, prompt, session_id=session_id)),
             self.run_dspy(prompt)
-        )
-        if response:
-            response = await self.rephrase(prompt, response, history, history_context, session_id=session_id)
-        if dspy_response:
-            dspy_response = await self.rephrase(prompt, dspy_response, history, history_context, session_id=session_id)
-        best_response = await self._pick_best_answer(prompt, response, direct_response, dspy_response)
+        , return_exceptions=True)
+        best_response = await self._pick_best_answer(prompt, results)
         final_response = Response(mesg=best_response.mesg)
         await asyncio.gather(
             self.memory.add_message(role="AI", content=best_response.mesg, session_id=session_id),
@@ -392,9 +391,15 @@ Answer: """
             prompt_template_config=self.prompt_template_config
         )
 
-    async def response(self, prompt: str, response1: str, response2: str, response3: str, **kwargs) -> Message:
+    async def response(self, prompt: str, responses: List[Message], **kwargs) -> Message:
+        kwargs = { # XXX Figure out how to do a list here
+            "prompt": prompt,
+            "response1": isinstance(responses[0], Exception) and str(responses[0]) or responses[0].mesg,
+            "response2": isinstance(responses[1], Exception) and str(responses[1]) or responses[1].mesg,
+            "response3": isinstance(responses[2], Exception) and str(responses[2]) or responses[2].mesg
+        }
         try:
-            result = await self.kernel.invoke(self.chat_fn, prompt=prompt, response1=response1, response2=response2, response3=response3)
+            result = await self.kernel.invoke(self.chat_fn, **kwargs)
         except KernelInvokeException as e:
             print(f"Selector response failed: {e}")
             return Thought(mesg=str(e)) # Should we just return the first one here?
