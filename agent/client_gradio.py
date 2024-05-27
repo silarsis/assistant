@@ -41,6 +41,8 @@ from numpy.typing import ArrayLike
 
 from config import settings, AgentModel
 
+HistoryType = list[list[str, str]]
+
 
 def generate_code_verifier(length=128):
     """
@@ -147,7 +149,7 @@ class Agent(BaseModel):
             pass
         return [audio_state, text]
     
-    async def process_file_input(self, filename: str, history: list[list[str, str]], *args, **kwargs):
+    async def process_file_input(self, filename: str, history: HistoryType, *args, **kwargs):
         history.append([filename, "Thinking..."])
         yield([history, None, None])
         recvQ = asyncio.Queue()
@@ -163,7 +165,7 @@ class Agent(BaseModel):
                 if response.final: # Could also check here if the task is complete?
                     break
         
-    async def process_input(self, input: Union[str,bytes], history: list[list[str, str]], *args, **kwargs):
+    async def process_input(self, input: Union[str, bytes], history: HistoryType, *args, **kwargs):
         history.append([input, "Thinking..."])
         yield(["", history, None, None])
         recvQ = asyncio.Queue()
@@ -355,7 +357,7 @@ class Agent(BaseModel):
         settings.save()
         return hear_thoughts
     
-    def update_radio(self, prompt: str, history: list[list[str, str]]) -> List:
+    def update_radio(self, prompt: str, history: HistoryType) -> List[str, HistoryType]:
         history.append([prompt, "Thinking..."])
         return [prompt, history]
     
@@ -552,10 +554,10 @@ with gr.Blocks(fill_height=True) as demo:
                 all_children = [x for c in all_crew for x in c.children[0].children[1:]]
                 goal.submit(generate_crew, [goal] + all_children, all_children)
             with gr.Tab('Tools'):
-                for p in agent.list_plugins():
-                    with gr.Accordion(p.name, open=False):
-                        for f in p.functions:
-                            gr.Checkbox(value=True, label=f"{p.name}.{f}", interactive=True)
+                for plugin_name, plugin in agent.list_plugins().items():
+                    with gr.Accordion(plugin_name, open=False):
+                        for f_name in plugin.functions:
+                            gr.Checkbox(value=True, label=f"{plugin_name}.{f_name}", interactive=True)
             with gr.Tab('Radio') as radio_tab:
                 textboxes = [
                     gr.Textbox(label="Prompt", placeholder="80's and 90's greatest hits and influential music", type="text"),
