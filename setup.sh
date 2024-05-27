@@ -13,7 +13,10 @@ venv_name=".venv"
 requirements_file="agent/requirements.txt"
 
 # Define the python script to run
-python_script="agent/client_gradio.py"
+python_script="./client_gradio.py"
+
+# Check the current dir name in case we're already in the repo
+current_dir_name=$(basename "$PWD")
 
 # Check if git is installed
 if ! git --version > /dev/null 2>&1; then
@@ -28,7 +31,7 @@ if ! python --version > /dev/null 2>&1; then
 fi
 
 # Clone the repository if it doesn't exist
-if [ ! -d "$dir_name" ]; then
+if [ ! -d "$dir_name" ] || [ "$current_dir_name" != "$dir_name" ]; then
     if ! git clone $repo_url; then
         echo "Failed to clone the repository. Please check the URL and try again."
         exit 1
@@ -36,7 +39,9 @@ if [ ! -d "$dir_name" ]; then
 fi
 
 # Change to the directory
-cd $dir_name || exit
+if [ "$current_dir_name" != "$dir_name" ]; then
+    cd $dir_name || exit
+fi
 
 # Create the virtual environment if it doesn't exist
 if [ ! -d "$venv_name" ]; then
