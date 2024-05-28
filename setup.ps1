@@ -11,7 +11,7 @@ $venv_name = ".venv"
 $requirements_file = "agent/requirements.txt"
 
 # Define the python script to run
-$python_script = "agent/client_gradio.py"
+$python_script = "./client_gradio.py"
 
 # Check if git is installed
 if (!(Get-Command git -ErrorAction SilentlyContinue)) {
