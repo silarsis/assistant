@@ -2,6 +2,8 @@ import time
 
 from pydantic import BaseModel
 
+from langchain.text_splitter import SpacyTextSplitter
+
 import chromadb
 from chromadb.config import Settings
 from chromadb.utils import embedding_functions
@@ -61,8 +63,8 @@ class DocStore(BaseModel):
             
     def upload(self, doc: str):
         """ Takes an entire document as a string, breaks it into elements and calls load_doc """
-        # Basic until we have a proper parser
-        elements = doc.split("\n")
+        text_splitter = SpacyTextSplitter()
+        elements = text_splitter.split_text(doc)
         self.load_doc(hash(doc), elements)
             
     def query(self, query: str, collection_name: str = 'AssistantCollection'):

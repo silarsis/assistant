@@ -7,6 +7,10 @@ import numpy
 
 from pydantic import BaseModel
 
+# Tools for file upload
+import magic
+from pypdf import PdfReader
+
 import dspy
 
 # from models.tools import apify
@@ -33,7 +37,6 @@ from models.plugins.GoogleDocs import GoogleDocLoaderPlugin
 from models.plugins.GoogleSearch import GoogleSearchPlugin
 from models.plugins.ImageGeneration import ImageGenerationPlugin
 from models.plugins.ScrapeText import ScrapeTextPlugin
-from models.plugins.CrewAI import CrewAIPlugin
 from models.plugins.Tools import ToolsPlugin
 from semantic_kernel.core_plugins import MathPlugin, TextPlugin, TimePlugin, TextMemoryPlugin
 
@@ -104,7 +107,6 @@ class Guide:
         self.guide.add_plugin(ScrapeTextPlugin(), "scrape_text")
         self.guide.add_plugin(ToolsPlugin(kernel=self.guide), "tools")
         self.guide.add_plugin(GoogleSearchPlugin(), "google_search")
-        self.guide.add_plugin(CrewAIPlugin(kernel=self.guide), "crew_ai")
         self.radioQueue = asyncio.Queue()
         self.guide.add_function(
             function_name="generate_code", plugin_name="code_generation",
@@ -183,12 +185,26 @@ class Guide:
             return
         history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
-        response = upload_image(filename)
-        final_response = await self.rephrase("describe this image", Thought(mesg=response), history, history_context, session_id=session_id)
-        await asyncio.gather(
-            self.memory.add_message(role="AI", content=f"Response: {final_response.mesg}\n", session_id=session_id),
-            callback(final_response)
-        )
+        # Now want to decide what to do with the file - if it's a document, rip it apart and store it. If it's an image, send it to OpenAI
+        filetype = magic.from_file(filename, mime=True)
+        if filetype.startswith("text"):
+            with open(filename, "r") as f:
+                file_data = f.read()
+            await self.upload_file_with_callback(file_data, callback, session_id=session_id, hear_thoughts=hear_thoughts)
+            return None # return a summary of the doc?
+        if filetype.startswith("image"):
+            response = upload_image(filename)
+            final_response = await self.rephrase("describe this image", Thought(mesg=response), history, history_context, session_id=session_id)
+            await asyncio.gather(
+                self.memory.add_message(role="AI", content=f"Response: {final_response.mesg}\n", session_id=session_id),
+                callback(final_response)
+            )
+            return None
+        if filetype.startswith("application/pdf"):
+            file_data = PdfReader(filename).extract_text()
+            await self.upload_file_with_callback(file_data, callback, session_id=session_id, hear_thoughts=hear_thoughts)
+            return None # return a summary of the doc?
+        callback(Response(mesg=f"Unsupported file type: {filetype}"))
         return None
     
     async def run_dspy(self, prompt: str):
@@ -224,7 +240,7 @@ class Guide:
         return None
     
     async def generate_crew(self, goal: str) -> List[List[str]]:
-        # Call the CrewAI plugin to generate a crew
+        # Call the CrewAI plugin to generate a crew - no longer used, deprecating crewai but might replace with something of my own
         gen_crew = self.guide.func("precanned", "generate_crew")
         result = await self.guide.invoke(gen_crew, goal=goal)
         return result
