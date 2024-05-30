@@ -31,7 +31,7 @@ if ! python --version > /dev/null 2>&1; then
 fi
 
 # Clone the repository if it doesn't exist
-if [ ! -d "$dir_name" ] || [ "$current_dir_name" != "$dir_name" ]; then
+if [ ! -d "$dir_name" ] && [ "$current_dir_name" != "$dir_name" ]; then
     if ! git clone $repo_url; then
         echo "Failed to clone the repository. Please check the URL and try again."
         exit 1
@@ -71,8 +71,5 @@ fi
 # Change to the agent directory
 cd agent || exit
 
-# Run the python script
-if ! python $python_script; then
-    echo "Failed to run the Python script. Please check the script and try again."
-    exit 1
-fi
+echo "Now, run the following command to start the agent:"
+echo "python $python_script"

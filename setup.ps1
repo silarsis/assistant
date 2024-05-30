@@ -64,10 +64,6 @@ try {
 # Change to the agent directory
 Set-Location -Path agent
 
-# Run the python script
-try {
-    python $python_script
-} catch {
-    Write-Host "Failed to run the Python script. Please check the script and try again."
-    exit 1
-}
+Write-Host "The assistant is now ready to be used."
+Write-Host "To start the assistant, run the following command:"
+Write-Host "python $python_script"
