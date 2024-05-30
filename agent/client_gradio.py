@@ -357,7 +357,7 @@ class Agent(BaseModel):
         settings.save()
         return hear_thoughts
     
-    def update_radio(self, prompt: str, history: HistoryType) -> List[str, HistoryType]:
+    def update_radio(self, prompt: str, history: HistoryType) -> list[str, HistoryType]:
         history.append([prompt, "Thinking..."])
         return [prompt, history]
     
