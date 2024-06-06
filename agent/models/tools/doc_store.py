@@ -2,7 +2,9 @@ import time
 
 from pydantic import BaseModel
 
-from langchain.text_splitter import SpacyTextSplitter
+# from langchain.text_splitter import SpacyTextSplitter
+from langchain_experimental.text_splitter import SemanticChunker
+from models.tools.llm_connect import LLMConnect
 
 import chromadb
 from chromadb.config import Settings
@@ -13,10 +15,19 @@ from config import settings
 class DocStore(BaseModel):
     _vector_stores: dict = {}
     _chroma_client: chromadb.Client = None
+    _text_splitter = None
+    _embeddings = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._embeddings = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+        llmConnector = LLMConnect(
+            api_type=settings.openai_api_type, 
+            api_key=settings.openai_api_key, 
+            api_base=settings.openai_api_base, 
+            deployment_name=settings.openai_deployment_name, 
+            org_id=settings.openai_org_id
+        )
+        self._text_splitter = SemanticChunker(llmConnector.embeddings())
         if settings.chroma_mode == 'remote':
             self._connect_to_remote_chromadb()
         else:
@@ -44,6 +55,9 @@ class DocStore(BaseModel):
             else:
                 break
             
+    def _cache_key(self, docid: str) -> str:
+        return f"doc_{docid}_key"
+    
     def _vector_store(self, collection_name: str = 'AssistantCollection'):
         cache_key = self._cache_key(collection_name)
         if cache_key not in self._vector_stores:
@@ -63,9 +77,9 @@ class DocStore(BaseModel):
             
     def upload(self, doc: str):
         """ Takes an entire document as a string, breaks it into elements and calls load_doc """
-        text_splitter = SpacyTextSplitter()
-        elements = text_splitter.split_text(doc)
-        self.load_doc(hash(doc), elements)
+        # Really should either hint or figure out the best method for chunking.
+        elements = self._text_splitter.create_documents([doc])
+        self.load_doc(hash(doc), [e.page_content for e in elements])
             
     def query(self, query: str, collection_name: str = 'AssistantCollection'):
         return self._vector_store(collection_name).query(query)

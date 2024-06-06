@@ -148,15 +148,20 @@ class Guide:
                     return Thought(mesg=e.args[0])
             except Exception:
                 pass
-            print(f"Planning failed: {e}")
+            print(f"Planning failed with PlannerException: {e}")
             if hear_thoughts:
                 await callback(Thought(mesg=str(e)))
-            result = ""
+            result = f"PlannerException: {e.args[0]}"
         except Exception as e:
+            try:
+                if 'APITimeoutError' in e.args[0]:
+                    return Thought(mesg="Request timed out - check the network connection to your LLM")
+            except Exception:
+                pass
             print(f"Planning failed: {e}")
             if hear_thoughts:
                 await callback(Thought(mesg=str(e)))
-            result = ""
+            result = f"Exception: {e.args[0]}"
         return Thought(mesg=str(result))
 
     async def rephrase(self, input: str, answer: Message, history: str, history_context: str, session_id: str = DEFAULT_SESSION_ID) -> Message:
@@ -190,20 +195,25 @@ class Guide:
         if filetype.startswith("text"):
             with open(filename, "r") as f:
                 file_data = f.read()
+            # file_data = base64.b64decode(file_data)
             await self.upload_file_with_callback(file_data, callback, session_id=session_id, hear_thoughts=hear_thoughts)
-            return None # return a summary of the doc?
+            await callback(Thought(mesg="File successfully uploaded", final=True))
+            return None
         if filetype.startswith("image"):
             response = upload_image(filename)
             final_response = await self.rephrase("describe this image", Thought(mesg=response), history, history_context, session_id=session_id)
+            final_response.final = True
             await asyncio.gather(
                 self.memory.add_message(role="AI", content=f"Response: {final_response.mesg}\n", session_id=session_id),
                 callback(final_response)
             )
             return None
         if filetype.startswith("application/pdf"):
-            file_data = PdfReader(filename).extract_text()
+            pdf = PdfReader(filename)
+            file_data = '\n'.join([page.extract_text() for page in pdf.pages])
             await self.upload_file_with_callback(file_data, callback, session_id=session_id, hear_thoughts=hear_thoughts)
-            return None # return a summary of the doc?
+            await callback(Thought(mesg=f"{filetype} File successfully uploaded", final=True))
+            return None
         callback(Response(mesg=f"Unsupported file type: {filetype}"))
         return None
     
@@ -223,13 +233,15 @@ class Guide:
         # Convert the prompt to character + history
         history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
+        
         def rephrase(response: Message) -> Message:
             return self.rephrase(prompt, response, history, history_context, session_id=session_id)
+        
         _, *results = await asyncio.gather(
             self.memory.add_message(role="Human", content=prompt, session_id=session_id),
             rephrase(await self._plan(prompt, callback, history_context, history, hear_thoughts=hear_thoughts)),
             rephrase(await self.direct_responder.response(history_context, history, prompt, session_id=session_id)),
-            self.run_dspy(prompt)
+            rephrase(self.run_dspy(prompt))
         , return_exceptions=True)
         best_response = await self._pick_best_answer(prompt, results)
         final_response = Response(mesg=best_response.mesg)
@@ -246,9 +258,8 @@ class Guide:
         return result
 
     async def upload_file_with_callback(self, file_data: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> None:
-        file = base64.b64decode(file_data)
         document_store = DocStore()
-        document_store.upload(file)
+        document_store.upload(file_data)
         await callback(Response("Document Uploaded"))
 
     async def update_prompt_template(self, prompt: str, callback: Callable[[str], None], **kwargs) -> str:
@@ -315,6 +326,12 @@ Answer: """
             result = await self.kernel.invoke(self.chat_fn, context=context, history=history, input=input, time=time.asctime())
         except KernelInvokeException as exc:
             return Thought(mesg=str(exc) + " - Possible timeout?")
+        except Exception as e:
+            try:
+                if 'APITimeoutError' in e.args[0]:
+                    return Thought(mesg="API Timed out - check the network connection to your LLM")
+            except Exception:
+                result = str(e)
         return Thought(mesg=str(result).strip())
 
 class RephraseResponse:
