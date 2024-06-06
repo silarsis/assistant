@@ -3,7 +3,7 @@ volumes/*
 .data/
 */.env
 .env
-.env.json
+.env*.json
 agent/.env
 agent/.env.json
 **/*.pyc
