@@ -5,6 +5,7 @@ huggingface_hub
 python-dotenv
 langchain==0.2.1
 langchain-community==0.2.1
+langchain-experimental
 langchain-openai
 openai
 google-api-python-client
@@ -15,12 +16,12 @@ certifi
 apify-client
 google-auth-httplib2
 google-auth-oauthlib
-chromadb==0.4.22
+chromadb==0.5.0
 semantic-kernel
 opentelemetry-api
 opentelemetry-sdk
 opentelemetry-exporter-otlp
-gradio>=4.31.5
+gradio>=4.32.0
 torchaudio
 pydantic
 pydantic-settings
