@@ -241,7 +241,7 @@ class Guide:
             self.memory.add_message(role="Human", content=prompt, session_id=session_id),
             rephrase(await self._plan(prompt, callback, history_context, history, hear_thoughts=hear_thoughts)),
             rephrase(await self.direct_responder.response(history_context, history, prompt, session_id=session_id)),
-            rephrase(self.run_dspy(prompt))
+            rephrase(await self.run_dspy(prompt))
         , return_exceptions=True)
         best_response = await self._pick_best_answer(prompt, results)
         final_response = Response(mesg=best_response.mesg)
