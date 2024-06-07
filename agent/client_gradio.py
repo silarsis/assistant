@@ -43,6 +43,16 @@ from config import settings, AgentModel
 
 HistoryType = list[list[str, str]]
 
+SpotifyScript = """
+window.onSpotifyWebPlaybackSDKReady = () => {
+  const token = '{settings.spotify_token}';
+  const player = new Spotify.Player({
+    name: 'Web Playback SDK Quick Start Player',
+    getOAuthToken: cb => { cb(token); },
+    volume: 0.5
+  });
+  player.connect();
+"""
 
 def generate_code_verifier(length=128):
     """
@@ -452,7 +462,7 @@ def radio_tick_wav(*args, **kwargs):
     except QueueEmpty:
         return None
 
-with gr.Blocks(fill_height=True) as demo:
+with gr.Blocks(fill_height=True, head='<script src="https://sdk.scdn.co/spotify-player.js"></script>') as demo:
     agent.settings_block = demo
     with gr.Row():
         with gr.Column(scale=2):
@@ -559,6 +569,7 @@ with gr.Blocks(fill_height=True) as demo:
                         for f_name in plugin.functions:
                             gr.Checkbox(value=True, label=f"{plugin_name}.{f_name}", interactive=True)
             with gr.Tab('Radio') as radio_tab:
+                # In here somewhere, need to include https://developer.spotify.com/documentation/web-playback-sdk/tutorials/getting-started
                 textboxes = [
                     gr.Textbox(label="Prompt", placeholder="80's and 90's greatest hits and influential music", type="text"),
                     gr.Textbox(label="Announcer Style", placeholder="Casey Kasem's American Top 40", type="text")
