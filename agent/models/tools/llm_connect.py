@@ -59,8 +59,21 @@ class LLMConnect(BaseModel):
         # base url should be https://domain_name - that's it.
         # deployment gets added on as "/openai/deployments/{deployment}" to become base_url
         if self.api_type == "azure":
-            client = AsyncAzureOpenAI(api_key=self.api_key, organization=self.org_id, azure_endpoint=self.api_base, azure_deployment=self.deployment_name, api_version=self.api_version)
-            service = AzureChatCompletion(service_id=service_id, endpoint=self.api_base, deployment_name=self.deployment_name, async_client=client)
+            client = AsyncAzureOpenAI(
+                api_key=self.api_key, 
+                api_version=self.api_version,
+                organization=self.org_id, 
+                azure_endpoint=self.api_base, 
+                azure_deployment=self.deployment_name
+            )
+            service = AzureChatCompletion(
+                api_key=self.api_key, 
+                api_version=self.api_version,
+                service_id=service_id, 
+                endpoint=self.api_base, 
+                deployment_name=self.deployment_name, 
+                async_client=client
+            )
         else:
             client = AsyncOpenAI(api_key=self.api_key, organization=self.org_id, base_url=self.api_base)
             service = OpenAIChatCompletion(self.deployment_name, async_client=client, service_id=service_id)
