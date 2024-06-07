@@ -16,7 +16,6 @@ ENV HUGGINGFACE_HUB_CACHE /models/
 
 COPY *.py .
 COPY models/ ./models/
-COPY .env ./
 # COPY .vscode/launch.json .vscode/launch.json
 
 CMD [ "python", "client_gradio.py" ]
