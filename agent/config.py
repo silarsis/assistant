@@ -1,12 +1,19 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
+from pydantic_settings.sources import EnvSettingsSource
 from pydantic.fields import FieldInfo, Field
 from pydantic import computed_field, BaseModel
 from pathlib import Path
 import keyring
+from keyring.backends.SecretService import Keyring as SecretServiceKeyring
 
-from typing import Optional, Literal, Tuple, Any, Dict, Type, List
+from typing import Optional, Literal, Tuple, Any, Dict, Type, List, Mapping, Iterator, cast
 
 import json
+
+KEYRING_NAME = "EchoAgentKeys"
+SECRET_KEYS = ["openai_api_key", "img_openai_api_key", "img_upload_api_key", "elevenlabs_api_key",
+             "wolfram_alpha_appid", "google_api_key", "google_cse_id", "apify_api_key", "presto_password"]
+EXCLUDE_KEYS = SECRET_KEYS + ['spotify_client_verifier', 'spotify_client_code', 'spotify_access_token', 'spotify_refresh_token', 'spotify_expiry']
 
 class JsonConfigSettingsSource(PydanticBaseSettingsSource): # Taken from https://docs.pydantic.dev/latest/concepts/pydantic_settings/#adding-sources
     """
@@ -44,6 +51,76 @@ class JsonConfigSettingsSource(PydanticBaseSettingsSource): # Taken from https:/
         except json.decoder.JSONDecodeError as e:
             print(f"Failed to load JSON, skipping: {e}")
         return d
+    
+class KeyringSettingsSource(EnvSettingsSource):  # From https://github.com/pydantic/pydantic-settings/pull/140/files
+    """
+    Source class for loading settings values from keyrings.
+    """
+    
+    def __init__(
+        self,
+        settings_cls: type[BaseSettings],
+        keyring_backend: str | None = None,
+        case_sensitive: bool | None = None,
+        env_prefix: str | None = None,
+        env_nested_delimiter: str | None = None,
+    ) -> None:
+        self.keyring_backend = (
+            keyring_backend if keyring_backend is not None else settings_cls.model_config.get('keyring_backend')
+        )
+        super().__init__(settings_cls, case_sensitive, env_prefix, env_nested_delimiter)
+
+    def _load_env_vars(self) -> Mapping[str, str | None]:
+        return self._read_keyring(self.case_sensitive)
+
+    def _read_keyring(self, case_sensitive: bool) -> Mapping[str, str | None]:
+        keyring_backend = self.keyring_backend
+        if keyring_backend is None:
+            kr = cast(SecretServiceKeyring, keyring.core.get_keyring())
+        else:
+            # Correct mis-cast annotation in source package: https://github.com/jaraco/keyring/issues/645
+            all_keyrings = cast(Iterator[SecretServiceKeyring], keyring.backend.get_all_keyring())
+            try:
+                kr = next(be for be in all_keyrings if be.name == keyring_backend)
+            except StopIteration:
+                # Same behaviour as when a named dotenv file is not found
+                return {}
+
+        keyring_vars: dict[str, str | None] = {}
+        kr_collection = kr.get_preferred_collection()  # type: ignore[no-untyped-call]
+        kr_items = kr_collection.get_all_items()
+        keyring_vars.update({item.get_attributes()['service']: item.get_secret().decode() for item in kr_items})
+        if not case_sensitive:
+            return {k.lower(): v for k, v in keyring_vars.items()}
+        else:
+            return keyring_vars
+
+    def __call__(self) -> dict[str, Any]:
+        data: dict[str, Any] = super().__call__()
+
+        data_lower_keys: list[str] = []
+        if not self.case_sensitive:
+            data_lower_keys = [x.lower() for x in data.keys()]
+
+        # As `extra` config is allowed in keyring settings source, We have to
+        # update data with extra env variables from keyring.
+        for env_name, env_value in self.env_vars.items():
+            if env_name.startswith(self.env_prefix) and env_value is not None:
+                env_name_without_prefix = env_name[self.env_prefix_len :]
+                first_key, *_ = env_name_without_prefix.split(self.env_nested_delimiter)
+
+                if (data_lower_keys and first_key not in data_lower_keys) or (
+                    not data_lower_keys and first_key not in data
+                ):
+                    data[first_key] = env_value
+
+        return data
+
+    def __repr__(self) -> str:
+        return (
+            f'KeyringSettingsSource(keyring_backend={self.keyring_backend!r}, '
+            f'env_nested_delimiter={self.env_nested_delimiter!r}, env_prefix_len={self.env_prefix_len!r})'
+        )
 
 class AgentModel(BaseModel):
     role: str
@@ -128,11 +205,11 @@ Always check the context and chat history first to see if you know an answer.
     
     @computed_field(repr=False)
     def presto_password(self) -> str:
-        return keyring.get_password("ai", "presto_password") or ""
+        return keyring.get_password(KEYRING_NAME, "presto_password") or ""
     
     @presto_password.setter
     def presto_password(self, value: str) -> None:
-        keyring.set_password("ai", "presto_password", value)
+        keyring.set_password(KEYRING_NAME, "presto_password", value)
     
     @classmethod
     def settings_customise_sources(
@@ -148,12 +225,16 @@ Always check the context and chat history first to see if you know an answer.
             dotenv_settings,
             env_settings,
             JsonConfigSettingsSource(settings_cls),
+            KeyringSettingsSource(settings_cls, keyring_backend=KEYRING_NAME),
             file_secret_settings,
         )
 
     def save(self):
         print("Saving Settings")
         with open('.env.json', 'w') as f:
-            f.write(json.dumps(self.model_dump(mode='json', exclude=['presto_password', 'spotify_client_verifier', 'spotify_client_code', 'spotify_access_token', 'spotify_refresh_token', 'spotify_expiry'])))
+            f.write(json.dumps(self.model_dump(mode='json', exclude=EXCLUDE_KEYS)))
+        for field in self.__fields__.values():
+            if field.name in SECRET_KEYS:
+                keyring.set_password(KEYRING_NAME, field.name, str(getattr(self, field.name)))
     
 settings = AppSettings()
