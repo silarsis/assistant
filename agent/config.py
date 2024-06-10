@@ -74,22 +74,10 @@ class KeyringSettingsSource(EnvSettingsSource):  # From https://github.com/pydan
         return self._read_keyring(self.case_sensitive)
 
     def _read_keyring(self, case_sensitive: bool) -> Mapping[str, str | None]:
-        keyring_backend = self.keyring_backend
-        if keyring_backend is None:
-            kr = cast(SecretServiceKeyring, keyring.core.get_keyring())
-        else:
-            # Correct mis-cast annotation in source package: https://github.com/jaraco/keyring/issues/645
-            all_keyrings = cast(Iterator[SecretServiceKeyring], keyring.backend.get_all_keyring())
-            try:
-                kr = next(be for be in all_keyrings if be.name == keyring_backend)
-            except StopIteration:
-                # Same behaviour as when a named dotenv file is not found
-                return {}
-
         keyring_vars: dict[str, str | None] = {}
-        kr_collection = kr.get_preferred_collection()  # type: ignore[no-untyped-call]
-        kr_items = kr_collection.get_all_items()
-        keyring_vars.update({item.get_attributes()['service']: item.get_secret().decode() for item in kr_items})
+        kr = cast(SecretServiceKeyring, keyring.core.get_keyring())
+        for fieldname in SECRET_KEYS:
+            keyring_vars[fieldname] = kr.get_password(KEYRING_NAME, fieldname)
         if not case_sensitive:
             return {k.lower(): v for k, v in keyring_vars.items()}
         else:
@@ -233,8 +221,8 @@ Always check the context and chat history first to see if you know an answer.
         print("Saving Settings")
         with open('.env.json', 'w') as f:
             f.write(json.dumps(self.model_dump(mode='json', exclude=EXCLUDE_KEYS)))
-        for field in self.__fields__.values():
-            if field.name in SECRET_KEYS:
-                keyring.set_password(KEYRING_NAME, field.name, str(getattr(self, field.name)))
+        for fieldname, field in self.model_fields.items():
+            if fieldname in SECRET_KEYS:
+                keyring.set_password(KEYRING_NAME, fieldname, getattr(self, fieldname))
     
 settings = AppSettings()
