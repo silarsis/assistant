@@ -234,16 +234,22 @@ class Guide:
         history = self.memory.get_formatted_history(session_id=session_id)
         history_context = self.memory.get_context(session_id=session_id)
         
-        def rephrase(response: Message) -> Message:
-            return self.rephrase(prompt, response, history, history_context, session_id=session_id)
+        async def rephrase(response: Message) -> Message:
+            return await self.rephrase(prompt, await response, history, history_context, session_id=session_id)
         
-        _, *results = await asyncio.gather(
+        tasks = [asyncio.create_task(coro) for coro in [
             self.memory.add_message(role="Human", content=prompt, session_id=session_id),
-            rephrase(await self._plan(prompt, callback, history_context, history, hear_thoughts=hear_thoughts)),
-            rephrase(await self.direct_responder.response(history_context, history, prompt, session_id=session_id)),
-            rephrase(await self.run_dspy(prompt))
-        , return_exceptions=True)
-        best_response = await self._pick_best_answer(prompt, results)
+            rephrase(self._plan(prompt, callback, history_context, history, hear_thoughts=hear_thoughts)),
+            rephrase(self.direct_responder.response(history_context, history, prompt, session_id=session_id)),
+            rephrase(self.run_dspy(prompt))
+        ]]
+        await asyncio.wait(tasks, timeout=10)
+        results = []
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+            results.append(task.result())
+        best_response = await self._pick_best_answer(prompt, results[1:])
         final_response = Response(mesg=best_response.mesg)
         await asyncio.gather(
             self.memory.add_message(role="AI", content=best_response.mesg, session_id=session_id),
