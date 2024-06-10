@@ -24,6 +24,7 @@ import google_auth_oauthlib
 import pyaudio
 import wave
 from elevenlabs.client import ElevenLabs
+from elevenlabs.core.api_error import ApiError
 
 from models.tools.llm_connect import LLMConnect
 
@@ -96,9 +97,15 @@ if pipeline:
     transcriber = pipeline("automatic-speech-recognition", model="openai/whisper-base.en")
 
 @functools.lru_cache()
-def elevenlabs_voices():
+def elevenlabs_voices(): # TODO: Refresh this when the API key is changed
     client = ElevenLabs(api_key=settings.elevenlabs_api_key)
-    return [[voice.name, voice.voice_id] for voice in client.voices.get_all().voices]
+    try:
+        voices = client.voices.get_all().voices
+    except ApiError as e:
+        if e.status_code == 401: # Invalid API key
+            voices = []
+        voices = []
+    return [[voice.name, voice.voice_id] for voice in voices]
 
 # From https://stackoverflow.com/questions/761824/python-how-to-convert-markdown-formatted-text-to-text,
 # code to turn markdown into plain text so it can be read nicely
