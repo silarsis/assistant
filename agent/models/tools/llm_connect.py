@@ -5,8 +5,8 @@ from openai import AzureOpenAI, OpenAI, AsyncAzureOpenAI, AsyncOpenAI
 
 from langchain_openai import AzureChatOpenAI, ChatOpenAI, AzureOpenAIEmbeddings, OpenAIEmbeddings
 
-from semantic_kernel.connectors.ai.open_ai.services.azure_chat_completion import AsyncAzureOpenAI
-from semantic_kernel.connectors.ai.open_ai.services.open_ai_chat_completion import AsyncOpenAI
+from semantic_kernel.connectors.ai.open_ai.services.azure_chat_completion import AsyncAzureOpenAI as sk_AsyncAzureOpenAI
+from semantic_kernel.connectors.ai.open_ai.services.open_ai_chat_completion import AsyncOpenAI as sk_AsyncOpenAI
 from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion, OpenAIChatCompletion
 
 import dspy
@@ -59,7 +59,7 @@ class LLMConnect(BaseModel):
         # base url should be https://domain_name - that's it.
         # deployment gets added on as "/openai/deployments/{deployment}" to become base_url
         if self.api_type == "azure":
-            client = AsyncAzureOpenAI(
+            client = sk_AsyncAzureOpenAI(
                 api_key=self.api_key, 
                 api_version=self.api_version,
                 organization=self.org_id, 
@@ -75,7 +75,7 @@ class LLMConnect(BaseModel):
                 async_client=client
             )
         else:
-            client = AsyncOpenAI(api_key=self.api_key, organization=self.org_id, base_url=self.api_base)
+            client = sk_AsyncOpenAI(api_key=self.api_key, organization=self.org_id, base_url=self.api_base)
             service = OpenAIChatCompletion(self.deployment_name, async_client=client, service_id=service_id)
         return service_id, service
     
