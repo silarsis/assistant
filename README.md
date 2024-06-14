@@ -4,8 +4,11 @@ This project is to tie together various LLM-related pieces, to try and build an 
 
 ## How to Use
 
-Checkout the source code, cd to the "agent" directory, run `python -m pip install -U --upgrade-strategy eager --force-reinstall -r requirements.txt` to install dependencies.
-then run `python ./client_gradio.py` to start the agent, and look for the locahost URI printed in the output - you should
+Checkout the source code, cd to the "agent" directory, install dependencies by running:
+
+python -m pip install -U --upgrade-strategy eager --force-reinstall -r requirements.txt
+
+Then run `python ./client_gradio.py` to start the agent, and look for the locahost URI printed in the output - you should
 be able to web browse to that.
 
 API keys are now entered in the app itself, so once you're running you can fold out the appropriate entries on the sidebar
