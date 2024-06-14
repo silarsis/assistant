@@ -16,7 +16,6 @@ certifi
 apify-client
 google-auth-httplib2
 google-auth-oauthlib
-chromadb==0.5.0
 semantic-kernel
 opentelemetry-api
 opentelemetry-sdk
@@ -37,3 +36,4 @@ dspy-ai
 dspy-ai[milvus]
 python-magic
 pypdf
+pymilvus
