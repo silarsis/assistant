@@ -6,13 +6,14 @@ from pathlib import Path
 import keyring
 from keyring.backends.SecretService import Keyring as SecretServiceKeyring
 
-from typing import Optional, Literal, Tuple, Any, Dict, Type, List, Mapping, Iterator, cast
+from typing import Optional, Literal, Tuple, Any, Dict, Type, List, Mapping, cast
 
 import json
 
 KEYRING_NAME = "EchoAgentKeys"
 SECRET_KEYS = ["openai_api_key", "img_openai_api_key", "img_upload_api_key", "elevenlabs_api_key",
-             "wolfram_alpha_appid", "google_api_key", "google_cse_id", "apify_api_key", "presto_password"]
+             "wolfram_alpha_appid", "google_api_key", "google_cse_id", "apify_api_key", "presto_password",
+             "milvus_api_token"]
 EXCLUDE_KEYS = SECRET_KEYS + ['spotify_client_verifier', 'spotify_client_code', 'spotify_access_token', 'spotify_refresh_token', 'spotify_expiry']
 
 class JsonConfigSettingsSource(PydanticBaseSettingsSource): # Taken from https://docs.pydantic.dev/latest/concepts/pydantic_settings/#adding-sources
@@ -154,10 +155,12 @@ Always check the context and chat history first to see if you know an answer.
     # Image upload api key for talking direct to OpenAI
     img_upload_api_key: str = ""
     
-    # ChromaDB for doc storage
-    chroma_mode: Optional[Literal["local", "remote"]] = "local"
-    chroma_host: Optional[str] = 'localhost'
-    chroma_port: Optional[str] = '6000'
+    # Docstore
+    docstore_mode: Literal["local", "remote"] = "local"
+    docstore_collection_prefix: str = ""
+    milvus_address: Optional[str] = ""
+    milvus_api_token: Optional[str] = ""
+    milvus_username: str = ""
     
     # Voice engine to use for text to speech
     voice: Literal["None", "ElevenLabs", "OpenAI", "TTS"] = 'None'
