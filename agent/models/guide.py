@@ -244,11 +244,7 @@ class Guide:
             rephrase(self.run_dspy(prompt))
         ]]
         await asyncio.wait(tasks, timeout=10)
-        results = []
-        for task in tasks:
-            if not task.done():
-                task.cancel()
-            results.append(task.result())
+        results = [ task.result() if task.done() else "Failed to complete in time" for task in tasks ]
         best_response = await self._pick_best_answer(prompt, results[1:])
         final_response = Response(mesg=best_response.mesg)
         await asyncio.gather(
