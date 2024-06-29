@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Annotated
 
 # from langchain.text_splitter import SpacyTextSplitter
 from langchain_experimental.text_splitter import SemanticChunker
@@ -55,11 +56,11 @@ class DocStore(BaseModel):
             self._vector_stores[cache_key] = pymilvus.Collection(name=f"{settings.docstore_collection_prefix}{collection_name}", using='default')
         return self._vector_stores[cache_key]
     
-    def _already_loaded(self, docid: str) -> bool:
+    def _already_loaded(self, docid: Annotated[str, "The document ID"]) -> bool:
         cache_key = self._cache_key(docid)
         return cache_key in (c.name for c in self._docstore_client.list_collections())
     
-    def load_doc(self, docid: str, elements: list[str]):
+    def load_doc(self, docid: Annotated[str, "The document ID"], elements: list[str]):
         if not self._already_loaded(docid):
             self.vector_store(docid).insert(collection_name=docid, data=elements)
             self._vector_store(docid).add(documents=elements, ids=[f'{docid}_{i}' for i in range(len(elements))])

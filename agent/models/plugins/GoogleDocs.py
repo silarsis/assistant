@@ -9,24 +9,19 @@ from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from langchain.docstore.document import Document
 
-import chromadb
-from chromadb.config import Settings
-# from chromadb.utils import embedding_functions
+from models.tools.doc_store import DocStore
 
 import re
-import time
-import os
 
 
 class GoogleDocLoaderPlugin(BaseModel):
     kernel: Any = None
     _credentials: Credentials = None
     _vector_stores: dict = {}
-    _chroma_client: chromadb.Client = None
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # self._embeddings = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+        self._doc_store = DocStore()
         # I think I really want to cache the results of these summarise calls
         self._summarize_prompt = self.kernel.add_function(
             plugin_name="gdocs",
@@ -36,26 +31,6 @@ class GoogleDocLoaderPlugin(BaseModel):
             max_tokens=2000, temperature=0.2, top_p=0.5)
         self.kernel.add_function(plugin_name='gdocs', function=self.load_gdoc)
         self.kernel.add_function(plugin_name='gdocs', function=self.scrape_gdoc)
-        self._connect_to_local_chromadb()
-        
-    def _connect_to_local_chromadb(self):
-        self._chroma_client = chromadb.PersistentClient(path='./volumes/chroma/local', settings=Settings(anonymized_telemetry=False))
-    
-    def _connect_to_remote_chromadb(self):
-        while True:
-            try:
-                self._chroma_client = chromadb.HttpClient(
-                    host=os.environ.get('CHROMA_HOST', 'localhost'), 
-                    port=os.environ.get('CHROMA_PORT', '6000'), 
-                    settings=Settings(anonymized_telemetry=False))
-            except ValueError as e:
-                if 'Could not connect' in str(e):
-                    print("Waiting for chromadb...")
-                    time.sleep(1)
-                else:
-                    raise e
-            else:
-                break
 
     def set_credentials(self, creds: Optional[Credentials] = None) -> str:
         self._credentials = creds
@@ -84,20 +59,6 @@ class GoogleDocLoaderPlugin(BaseModel):
     
     def _cache_key(self, docid: str) -> str:
         return f"gdoc_{docid}_key"
-    
-    def _vector_store(self, collection_name: str = 'LangChainCollection'):
-        cache_key = self._cache_key(collection_name)
-        if cache_key not in self._vector_stores:
-            self._vector_stores[cache_key] = self._chroma_client.create_collection(
-                # embedding_function=self._embeddings,
-                name=cache_key, get_or_create=True
-            )
-        return self._vector_stores[cache_key]
-    
-    def _already_loaded(self, docid: str) -> bool:
-        cache_key = self._cache_key(docid)
-        print(self._chroma_client.list_collections())
-        return cache_key in (c.name for c in self._chroma_client.list_collections())
     
     def _fetch_from_gdocs(self, docid: str, creds) -> str:
         service = build("docs", "v1", credentials=creds)
@@ -136,10 +97,7 @@ class GoogleDocLoaderPlugin(BaseModel):
             docid = re.search(r'document/d/([^/]+)/', docid).group(1)
         elements = self._fetch_from_gdocs(docid, self._credentials)
         # Store in the vectordb
-        self._vector_store(docid).add(documents=elements, ids=[f'{docid}_{i}' for i in range(len(elements))])
-        # Need to store in a separate db for the cleartext, with the same chunking of elements
-        # Then, we can use the same ids to retrieve the cleartext for things like summarization
-        # Now summarize the doc
+        self._doc_store.load_doc(docid, elements)
         summarized_doc = await self._summarize_elements(elements, interim=None)
         return f"Document loaded successfully. Document Summary: {summarized_doc}"
     
@@ -153,10 +111,6 @@ class GoogleDocLoaderPlugin(BaseModel):
             docid = re.search(r'document/d/([^/]+)/', docid).group(1)
         elements = self._fetch_from_gdocs(docid, self._credentials)
         return ''.join(elements)
-
-    @kernel_function(name='search_gdoc', description='Search in a saved gdoc for relevant/similar terms')
-    async def search_gdoc(self, docid: Annotated[str, "The google document ID"] = "") -> str:
-        store = self._vector_store(docid)
         
     
 # Thought: Instead of databasing the raw text of the doc, why don't we use gdocs as the database,
