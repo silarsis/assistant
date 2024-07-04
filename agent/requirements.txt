@@ -15,6 +15,7 @@ langchain-community==0.2.1
 langchain-experimental
 langchain-openai
 langchain==0.2.1
+langsmith
 loguru
 markdown
 milvus[client]~=2.3.7 # Locked down because of dspy-ai
