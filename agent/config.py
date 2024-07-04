@@ -155,6 +155,11 @@ Always check the context and chat history first to see if you know an answer.
     # Image upload api key for talking direct to OpenAI
     img_upload_api_key: str = ""
     
+    # LangChain/LangSmith
+    langchain_tracing_v2: bool = False
+    langchain_api_key: str = ""
+    langchain_project: str = "echo"
+    
     # Docstore
     docstore_mode: Literal["local", "remote"] = "local"
     docstore_collection_prefix: str = ""
