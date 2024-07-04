@@ -14,8 +14,8 @@ class ToolsPlugin(BaseModel):
     async def list_tools(self) -> str:
         """Returns a list of all the tools the agents have available to them"""
         functions = []
-        for p in self.kernel.plugins:
-            for f in p.functions:
-                functions.append(f"{p.name}.{f} - {p.functions[f].description}")
+        for p_name, p in self.kernel.plugins.items():
+            for f_name, f in p.functions.items():
+                functions.append(f"{p_name}.{f_name} - {f.description}")
         str_f = '\n* '.join(functions)
         return str_f
