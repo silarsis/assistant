@@ -536,7 +536,7 @@ with gr.Blocks(fill_height=True, head='<script src="https://sdk.scdn.co/spotify-
                 mp3_speaker = gr.Audio(interactive=False, visible=False, format='mp3', autoplay=True)
         with gr.Column(scale=8):
             with gr.Tab('ChatBot'):
-                chatbot = gr.Chatbot(agent.get_history_for_chatbot, bubble_full_width=False, show_copy_button=True)
+                chatbot = gr.Chatbot(agent.get_history_for_chatbot, bubble_full_width=False, show_copy_button=True, height="80vh")
                 with gr.Row():
                     txt = gr.Textbox(
                         scale=8,
