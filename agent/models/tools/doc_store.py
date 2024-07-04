@@ -25,6 +25,9 @@ class DocStore(BaseModel):
             org_id=settings.openai_org_id
         )
         self._text_splitter = SemanticChunker(llmConnector.embeddings())
+        self._connect()
+        
+    def _connect(self):
         if settings.docstore_mode == 'remote':
             self._connect_to_remote_docstore()
         else:
@@ -57,12 +60,14 @@ class DocStore(BaseModel):
         return self._vector_stores[cache_key]
     
     def _already_loaded(self, docid: Annotated[str, "The document ID"]) -> bool:
+        if self._docstore_client is None:
+            self._connect()
         cache_key = self._cache_key(docid)
         return cache_key in (c.name for c in self._docstore_client.list_collections())
     
     def load_doc(self, docid: Annotated[str, "The document ID"], elements: list[str]):
         if not self._already_loaded(docid):
-            self.vector_store(docid).insert(collection_name=docid, data=elements)
+            self._vector_store(docid).insert(collection_name=docid, data=elements)
             self._vector_store(docid).add(documents=elements, ids=[f'{docid}_{i}' for i in range(len(elements))])
             
     def upload(self, doc: str):
