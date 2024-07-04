@@ -9,8 +9,6 @@ from pydantic import BaseModel
 import magic
 from pypdf import PdfReader
 
-import dspy
-
 # from models.tools import apify
 from models.tools.memory import Memory
 from models.tools.openai_uploader import upload_image
@@ -71,7 +69,6 @@ def getKernel(model: Optional[str] = "") -> sk.Kernel:
         org_id=settings.openai_org_id
     )
     service_id, service = llmConnector.sk()
-    _ = llmConnector.dspy() # Doing this to ensure it's initialised before needed.
     kernel.add_service(service)
     return service_id, kernel
 
@@ -194,15 +191,6 @@ class Guide:
         callback(Response(mesg=f"Unsupported file type: {filetype}"))
         return None
     
-    async def run_dspy(self, prompt: str):
-        generate_answer = DSPYResponse()
-        try:
-            pred = generate_answer(question=prompt)
-        except Exception as e:
-            print(f"Failed to run DSPY: {e}")
-            return Thought(mesg=str(e))
-        return Thought(str(pred))
-    
     async def prompt_with_callback(self, prompt: Union[str,bytes], callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> Message:
         if not prompt:
             await callback(Response(mesg="I'm afraid I don't have enough context to respond. Could you please rephrase your question?", final=True))
@@ -218,10 +206,9 @@ class Guide:
             self.memory.add_message(role="Human", content=prompt, session_id=session_id),
             rephrase(self._plan(prompt, callback, history_context, history, hear_thoughts=hear_thoughts)),
             rephrase(self.direct_responder.response(history_context, history, prompt, session_id=session_id)),
-            rephrase(self.run_dspy(prompt))
         ]]
-        await asyncio.wait(tasks, timeout=10)
-        results = [ task.result() if task.done() else "Failed to complete in time" for task in tasks ]
+        await asyncio.wait(tasks, timeout=60)
+        results = [ task.result() if task.done() else Thought(mesg="Failed to complete in time") for task in tasks ]
         best_response = await self._pick_best_answer(prompt, results[1:])
         final_response = Response(mesg=best_response.mesg)
         await asyncio.gather(
@@ -373,9 +360,7 @@ class SelectorResponse:
 You have been tasked with answering the following: {{$prompt}}.
 Select the most informative response from the following responses and indicate your selection by sending either 'response 1' or 'response 2' or 'response 3'.
 
-Response 1: {{$response1}}
-Response 2: {{$response2}}
-Response 3: {{$response3}}
+{{$responses}}
 
 Answer: """
 
@@ -391,9 +376,7 @@ Answer: """
             name="rephrase_response", 
             input_variables=[
                 InputVariable(name="prompt", description="The original question", required=True),
-                InputVariable(name="response1", description="The first response", required=True),
-                InputVariable(name="response2", description="The second response", required=True),
-                InputVariable(name="response3", description="The third response", required=True),
+                InputVariable(name="responses", description="The responses to select from", required=True),
             ],
             execution_settings=req_settings
         )
@@ -404,12 +387,11 @@ Answer: """
         )
 
     async def response(self, prompt: str, responses: List[Message], **kwargs) -> Message:
-        kwargs = { # XXX Figure out how to do a list here
-            "prompt": prompt,
-            "response1": isinstance(responses[0], Exception) and str(responses[0]) or responses[0].mesg,
-            "response2": isinstance(responses[1], Exception) and str(responses[1]) or responses[1].mesg,
-            "response3": isinstance(responses[2], Exception) and str(responses[2]) or responses[2].mesg
+        kwargs = {
+            "responses": "\n".join([f"Response {i+1}: " + str(responses[i].mesg) for i in range(len(responses)-1)]),
+            "prompt": prompt
         }
+        print(kwargs)
         try:
             result = await self.kernel.invoke(self.chat_fn, **kwargs)
         except KernelInvokeException as e:
@@ -417,11 +399,3 @@ Answer: """
             return Thought(mesg=str(e)) # Should we just return the first one here?
         return Thought(mesg=str(result).strip())
     
-class DSPYResponse(dspy.Module):
-    def __init__(self):
-        super().__init__()
-        self.predict = dspy.ChainOfThought('question -> answer')
-        
-    def forward(self, question: str):
-        pred = self.predict(question=question)
-        return dspy.Prediction(answer=pred.answer)

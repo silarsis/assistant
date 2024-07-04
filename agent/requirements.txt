@@ -1,8 +1,6 @@
 apify-client
 bs4
 certifi
-dspy-ai>=2.4.9
-dspy-ai[milvus]>=2.4.9
 elevenlabs
 google-api-python-client
 google-auth-httplib2
@@ -18,7 +16,7 @@ langchain==0.2.1
 langsmith
 loguru
 markdown
-milvus[client]~=2.3.7 # Locked down because of dspy-ai
+milvus[client]
 nest_asyncio
 numpy
 openai
@@ -29,7 +27,7 @@ pyaudio
 pydantic>=2.7.4
 pydantic-settings
 pyhive[presto]
-pymilvus~=2.3.7 # Locked down because of dspy-ai
+pymilvus
 pypdf
 python-dotenv
 python-magic
