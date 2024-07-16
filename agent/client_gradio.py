@@ -7,12 +7,15 @@ import re
 import functools
 import hashlib
 import base64
-import random
+import secrets
 import string
+import os
 from io import StringIO
 from markdown import Markdown
 import json
 from asyncio import QueueEmpty
+from collections.abc import Iterable
+from typing import Annotated
 
 from models.tools.clean_markdown import convert_to_plain_text
 from models.tools.radio import AIRadio
@@ -63,7 +66,7 @@ def generate_code_verifier(length=128):
     """
     if settings.spotify_client_verifier: # Cacheing this is probably bad.
         return settings.spotify_client_verifier
-    token = ''.join(random.choices(string.ascii_letters + string.digits + '_.-~', k=length))
+    token = ''.join([ secrets.choice(string.ascii_letters + string.digits + '_.-~') for i in range(length) ])
     settings.spotify_client_verifier = token
     settings.save()
     return token
@@ -167,7 +170,8 @@ class Agent(BaseModel):
         return [audio_state, text]
     
     async def process_file_input(self, filename: str, history: HistoryType, *args, **kwargs):
-        history.append([filename, "Thinking..."])
+        base_filename = os.path.basename(filename)
+        history.append([base_filename, "Thinking..."])
         yield([history, None, None])
         recvQ = asyncio.Queue()
         async with asyncio.TaskGroup() as tg:
@@ -175,9 +179,9 @@ class Agent(BaseModel):
             _prompt_task = tg.create_task(
                 self._agent.prompt_file_with_callback(
                     filename, callback=recvQ.put, session_id=self.session_id, hear_thoughts=settings.hear_thoughts), name="prompt")
-            history[-1] = [filename, ""]
+            history[-1] = [base_filename, ""]
             while response := await recvQ.get():
-                history[-1] = [filename, history[-1][1] + response.mesg]
+                history[-1] = [base_filename, history[-1][1] + response.mesg]
                 yield([history] + list(self.speak(response.mesg)))
                 if response.final: # Could also check here if the task is complete?
                     break
@@ -259,7 +263,7 @@ class Agent(BaseModel):
     def tts_get_stream(self, text: str) -> bytes:
         q_text = quote(text)
         print("Requesting TTS from Local TTS instance")
-        with requests.get(f"http://{settings.tts_host}:{settings.tts_port}/api/tts?text={q_text}&speaker_id=p364&style_wav=&language_id=", stream=True) as wav:
+        with requests.get(f"http://{settings.tts_host}:{settings.tts_port}/api/tts?text={q_text}&speaker_id=p364&style_wav=&language_id=", stream=True, timeout=10) as wav:
             p = pyaudio.PyAudio()
             try:
                 wf = wave.Wave_read(wav.raw)
@@ -387,11 +391,12 @@ class Agent(BaseModel):
             'client_id': settings.spotify_client_id,
             'code_verifier': settings.spotify_client_verifier
         }
-        auth_response = requests.post("https://accounts.spotify.com/api/token", params=params, headers={'Content-Type': 'application/x-www-form-urlencoded'})
+        auth_response = requests.post("https://accounts.spotify.com/api/token", params=params, headers={'Content-Type': 'application/x-www-form-urlencoded'}, timeout=10)
         # Shouldn't store these in the config, should go to the spotify tool
         settings.spotify_access_token = auth_response.json()['access_token']
         settings.spotify_refresh_token = auth_response.json()['refresh_token']
         settings.spotify_expiry = auth_response.json()['expires_in'] + time.time() - 5 # 5 seconds before for some buffer
+        settings.save()
         return "Logged in - please return to your main page"
     
     def play_pause_radio(self, button: str) -> List:
@@ -402,7 +407,13 @@ class Agent(BaseModel):
             self._agent._radio.pause()
             button = '▶️'
         return button
+
+    def documents(self) -> Iterable[Annotated[str, "docid"], Annotated[str, "docname"], Annotated[str, "full pathname for file"]]:
+        return self._agent.documents()
     
+    def delete_document(self, docid: str) -> None:
+        self._agent.delete_document(docid)
+
 
 def render_crew(crew_num: int, crew: AgentModel, render: bool = True) -> gr.Accordion:
     with gr.Accordion(f"Crewmember role: {crew.role or 'New'}", open=False, render=render) as crew_member:
@@ -422,7 +433,7 @@ async def generate_crew(goal: str = "", *crew_fields) -> List[str]:
         crew = await agent._agent.generate_crew(goal)
         try:
             new_crew = json.loads(str(crew))['crew']
-        except:
+        except Exception:
             new_crew = []
         crew_fields = list(crew_fields)
         for crew_num, fields in enumerate(range(0, len(crew_fields), 3)):
@@ -593,6 +604,27 @@ with gr.Blocks(fill_height=True, head='<script src="https://sdk.scdn.co/spotify-
                             + '\n* '.join([f"{plugin_name}.{f_name} - {plugin.functions[f_name].description}" for plugin_name, plugin in agent.list_plugins().items() for f_name in plugin.functions])
                             + "\n\nGenerate a list of steps for the following task, where each step specifies the input, the tool or tools to be used, and the expected output."
                             + '\n\nThe task is: Generate a threat model for the system design described at the following URL: <url>')
+            with gr.Tab('Documents'):
+                docs_trigger = gr.State(1)
+                with gr.Row():
+                    gr.Button("Refresh", scale=1).click(lambda x: x + 1, docs_trigger, docs_trigger)
+                @gr.render(inputs=docs_trigger)
+                def render_documents(docs_trigger):
+                    files = agent.documents()
+                    with gr.Row():
+                        file_box = gr.File(file_count="multiple", type="filepath", value=[x[2] for x in files], interactive=True, key="doc_organiser")
+                        file_box.upload(agent.process_file_input, [file_box, chatbot], [chatbot, wav_speaker, mp3_speaker]) # Need to output to file_box also
+                        file_box.delete(agent.delete_document, [file_box])
+                #         doc_delete = gr.Button("❌", scale=1)
+                #         doc_delete.click(agent.delete_document, [doc_num])
+                #         doc_download = gr.Download(label="Download")
+                #         doc_download.download(agent.process_file_output, [doc_download, doc_state], [doc_state])
+                #         doc_view = gr.FileViewer(label="View")
+                #         doc_view.view(agent.process_file_output, [doc_view, doc_state], [doc_state])
+                # Render a row for uploading a new file
+                with gr.Row():
+                    doc_upload = gr.File(type="filepath", label="Upload a document", file_types=['text', 'pdf'])
+                    doc_upload.upload(agent.process_file_input, [doc_upload, chatbot], [chatbot, wav_speaker, mp3_speaker])
 
 demo.queue()
 

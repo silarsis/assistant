@@ -1,5 +1,6 @@
 ## Tools
-from typing import Optional, Callable, Any, Literal, Union, List
+from collections.abc import Iterable
+from typing import Optional, Callable, Any, Literal, Union, List, Annotated
 import asyncio
 import time
 
@@ -30,7 +31,7 @@ from models.plugins.GoogleSearch import GoogleSearchPlugin
 from models.plugins.ImageGeneration import ImageGenerationPlugin
 from models.plugins.ScrapeText import ScrapeTextPlugin
 from models.plugins.Tools import ToolsPlugin
-from semantic_kernel.core_plugins import MathPlugin, TextPlugin, TimePlugin, TextMemoryPlugin
+from semantic_kernel.core_plugins import MathPlugin, TextPlugin, TimePlugin
 
 from config import settings
 
@@ -117,21 +118,15 @@ class Guide:
                 await callback(Thought(mesg=f"Planning result:\n{thought}\n"))
             result = await plan.invoke(kernel=self.guide)
         except PlannerException as e:
-            try:
-                if e.args[0] == 'Not possible to create plan for goal with available functions.\n':
-                    return Thought(mesg=e.args[0])
-            except Exception:
-                pass
+            if e.args and e.args[0] == 'Not possible to create plan for goal with available functions.\n':
+                return Thought(mesg=e.args[0])
             print(f"Planning failed with PlannerException: {e}")
             if hear_thoughts:
                 await callback(Thought(mesg=str(e)))
             result = f"PlannerException: {e.args[0]}"
         except Exception as e:
-            try:
-                if 'APITimeoutError' in e.args[0]:
-                    return Thought(mesg="Request timed out - check the network connection to your LLM")
-            except Exception:
-                pass
+            if e.args and 'APITimeoutError' in e.args[0]:
+                return Thought(mesg="Request timed out - check the network connection to your LLM")
             print(f"Planning failed: {e}")
             if hear_thoughts:
                 await callback(Thought(mesg=str(e)))
@@ -185,10 +180,10 @@ class Guide:
         if filetype.startswith("application/pdf"):
             pdf = PdfReader(filename)
             file_data = '\n'.join([page.extract_text() for page in pdf.pages])
-            await self.upload_file_with_callback(file_data, callback, session_id=session_id, hear_thoughts=hear_thoughts)
+            await self.upload_file_with_callback(file_data, filename, callback, session_id=session_id, hear_thoughts=hear_thoughts)
             await callback(Thought(mesg=f"{filetype} File successfully uploaded", final=True))
             return None
-        callback(Response(mesg=f"Unsupported file type: {filetype}"))
+        callback(Response(mesg=f"Unsupported file type: {filetype}", final=True))
         return None
     
     async def prompt_with_callback(self, prompt: Union[str,bytes], callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> Message:
@@ -223,10 +218,10 @@ class Guide:
         result = await self.guide.invoke(gen_crew, goal=goal)
         return result
 
-    async def upload_file_with_callback(self, file_data: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> None:
+    async def upload_file_with_callback(self, file_data: str, filename: str, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> None:
         document_store = DocStore()
-        document_store.upload(file_data)
-        await callback(Response("Document Uploaded"))
+        document_store.upload_document(file_data, filename)
+        await callback(Response("Document Uploaded", final=True))
 
     async def update_prompt_template(self, prompt: str, callback: Callable[[str], None], **kwargs) -> str:
         # self.direct_responder._prompt_templates.set(kwargs.get("session_id", DEFAULT_SESSION_ID), prompt)
@@ -241,6 +236,12 @@ class Guide:
         
     def list_plugins(self) -> List[Any]:
         return self.guide.plugins
+
+    def documents(self) -> Iterable[Annotated[str, "docid"], Annotated[str, "docname"], Annotated[str, "Full pathname for file"]]:
+        return DocStore().list_documents()
+
+    def delete_document(self, docid: str) -> Response:
+        return DocStore().delete_document(docid)
 
 
 class DirectResponse:

@@ -160,13 +160,6 @@ Always check the context and chat history first to see if you know an answer.
     langchain_api_key: str = ""
     langchain_project: str = "echo"
     
-    # Docstore
-    docstore_mode: Literal["local", "remote"] = "local"
-    docstore_collection_prefix: str = ""
-    milvus_address: Optional[str] = ""
-    milvus_api_token: Optional[str] = ""
-    milvus_username: str = ""
-    
     # Voice engine to use for text to speech
     voice: Literal["None", "ElevenLabs", "OpenAI", "TTS"] = 'None'
     # Text to speech running in the local docker container

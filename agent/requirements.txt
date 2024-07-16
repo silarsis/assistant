@@ -2,6 +2,7 @@ apify-client
 bs4
 certifi
 elevenlabs
+faiss-cpu
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
@@ -16,7 +17,6 @@ langchain==0.2.1
 langsmith
 loguru
 markdown
-milvus[client]
 nest_asyncio
 numpy
 openai
@@ -27,7 +27,6 @@ pyaudio
 pydantic>=2.7.4
 pydantic-settings
 pyhive[presto]
-pymilvus
 pypdf
 python-dotenv
 python-magic
