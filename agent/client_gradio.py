@@ -358,13 +358,20 @@ class Agent(BaseModel):
             gr.Textbox(label="TTS Port", value=settings.tts_port, visible=(settings.voice == 'TTS'))
         ]
         
-    def update_presto_settings(self, presto_host: str, presto_username: str, presto_password: str) -> None:
+    def update_presto_settings(self, presto_host: str, presto_username: str, presto_password: str) -> list[str, str, str]:
         settings.presto_host = presto_host
         settings.presto_username = presto_username
         settings.presto_password = presto_password
         settings.save()
+        return presto_host, presto_username, presto_password
         
-    def update_crew_settings(self, crew_num: int, role: str, goal: str, backstory: str) -> None:
+    def update_confluence_settings(self, confluence_uri: str, confluence_pat: str) -> list[str, str]:
+        settings.confluence_uri = confluence_uri
+        settings.confluence_pat = confluence_pat
+        settings.save()
+        return confluence_uri, confluence_pat
+
+    def update_crew_settings(self, crew_num: int, role: str, goal: str, backstory: str) -> list[int, str, str, str]:
         crew = AgentModel(role=role, goal=goal, backstory=backstory)
         if crew_num >= len(settings.crew):
             settings.crew.append(crew)
@@ -411,8 +418,12 @@ class Agent(BaseModel):
     def documents(self) -> Iterable[Annotated[str, "docid"], Annotated[str, "docname"], Annotated[str, "full pathname for file"]]:
         return self._agent.documents()
     
-    def delete_document(self, docid: str) -> None:
-        self._agent.delete_document(docid)
+    def delete_document(self, filepaths: str) -> None:
+        " Takes a list of files that exist, deletes the rest "
+        filenames = [ os.path.basename(filepath) for filepath in filepaths ]
+        for docid, _, _ in self._agent.documents():
+            if docid not in filenames:
+                self._agent.delete_document(docid)
 
 
 def render_crew(crew_num: int, crew: AgentModel, render: bool = True) -> gr.Accordion:
@@ -542,6 +553,12 @@ with gr.Blocks(fill_height=True, head='<script src="https://sdk.scdn.co/spotify-
                     ]
                     presto_button = gr.Button("Update")
                     presto_button.click(agent.update_presto_settings, presto_config)
+                with gr.Accordion("Confluence", open=False):
+                    confluence_config = [
+                        gr.Textbox(label="Confluence URI", value=settings.confluence_uri),
+                        gr.Textbox(label="Confluence Personal Access Token", value=settings.confluence_pat, type="password")
+                    ]
+                    gr.Button("Update").click(agent.update_confluence_settings, confluence_config, confluence_config)
             with gr.Row():
                 wav_speaker = gr.Audio(interactive=False, streaming=True, visible=False, format='wav', autoplay=True)
                 mp3_speaker = gr.Audio(interactive=False, visible=False, format='mp3', autoplay=True)

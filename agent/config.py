@@ -13,7 +13,7 @@ import json
 KEYRING_NAME = "EchoAgentKeys"
 SECRET_KEYS = ["openai_api_key", "img_openai_api_key", "img_upload_api_key", "elevenlabs_api_key",
              "wolfram_alpha_appid", "google_api_key", "google_cse_id", "apify_api_key", "presto_password",
-             "milvus_api_token"]
+             "confluence_pat"]
 EXCLUDE_KEYS = SECRET_KEYS + ['spotify_client_verifier', 'spotify_client_code', 'spotify_access_token', 'spotify_refresh_token', 'spotify_expiry']
 
 class JsonConfigSettingsSource(PydanticBaseSettingsSource): # Taken from https://docs.pydantic.dev/latest/concepts/pydantic_settings/#adding-sources
@@ -184,6 +184,9 @@ Always check the context and chat history first to see if you know an answer.
     # PyHive / Presto for internal data access
     presto_host: str = ""
     presto_username: str = ""
+    # Confluence for wiki
+    confluence_pat: str = ""
+    confluence_uri: str = ""
     # Spotify for radio
     spotify_client_id: str = "afffe002f50944d792eb41d79a5b5a96"
     spotify_client_verifier: str = ''
