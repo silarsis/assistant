@@ -6,14 +6,14 @@ faiss-cpu
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
-gradio>=4.32.0
+gradio>=4.38.1
 huggingface_hub
 keychain
 keyring
-langchain-community==0.2.1
+langchain-community>=0.2.5
 langchain-experimental
 langchain-openai
-langchain==0.2.1
+langchain>=0.2.5
 langsmith
 loguru
 markdown
