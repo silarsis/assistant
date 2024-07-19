@@ -10,6 +10,8 @@ import base64
 import secrets
 import string
 import os
+import tempfile
+import urllib.parse
 from io import StringIO
 from markdown import Markdown
 import json
@@ -425,6 +427,18 @@ class Agent(BaseModel):
             if docid not in filenames:
                 self._agent.delete_document(docid)
 
+    async def search_wiki(self, cql: str, history: HistoryType = []) -> str:
+        uri = urllib.parse.urljoin(settings.confluence_uri, "wiki/rest/api/content/search")
+        results = requests.get(
+            uri, params={'cql': cql},
+            headers={'Authorization': f"Bearer {settings.confluence_pat}"}, timeout=10)
+        # Get the results of the request, save to temp file
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as tfile:
+            tfile.write(results.text)
+            filename = tfile.name
+        input_result = self.process_file_input(filename, history)
+        os.unlink(filename)
+        return input_result
 
 def render_crew(crew_num: int, crew: AgentModel, render: bool = True) -> gr.Accordion:
     with gr.Accordion(f"Crewmember role: {crew.role or 'New'}", open=False, render=render) as crew_member:
@@ -642,6 +656,12 @@ with gr.Blocks(fill_height=True, head='<script src="https://sdk.scdn.co/spotify-
                 with gr.Row():
                     doc_upload = gr.File(type="filepath", label="Upload a document", file_types=['text', 'pdf'])
                     doc_upload.upload(agent.process_file_input, [doc_upload, chatbot], [chatbot, wav_speaker, mp3_speaker])
+                with gr.Row():
+                    wiki_uri = gr.Textbox(label="Wiki URI", type="text", placeholder=settings.confluence_uri)
+                with gr.Row():
+                    cql = gr.Textbox(label="Wiki Search CQL", type="text")
+                    wiki_search_button = gr.Button("Search", scale=1)
+                    wiki_search_button.click(agent.search_wiki, [cql, chatbot], [chatbot, wav_speaker, mp3_speaker])
 
 demo.queue()
 
