@@ -1,4 +1,4 @@
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, TypedDict, Literal, Required
 import os
 import json
 
@@ -6,6 +6,10 @@ import semantic_kernel as sk
 from semantic_kernel.prompt_template.prompt_template_config import PromptTemplateConfig
 from semantic_kernel.prompt_template.input_variable import InputVariable
 
+
+class Message(TypedDict):
+    role: Literal["Human", "AI"]
+    content: Required[str]
 
 class SummariseConversation:
     "Designed to summarise a conversation history"
@@ -81,16 +85,16 @@ Summary:
             'context': self.context.setdefault(session_id, ""),
             'messages': self.messages.get(session_id, [])
         }
-        with open(f".data/{session_id}.txt", "w") as f:
+        with open(f".data/{session_id}.json", "w") as f:
             f.write(json.dumps(data))
                 
     def load(self, session_id: str) -> None:
         # Load messages from file
         try:
-            with open(f".data/{session_id}.txt", "r") as f:
+            with open(f".data/{session_id}.json", "r") as f:
                 data = json.loads(f.read())
                 self.context[session_id] = data['context']
-                self.messages[session_id] = data['messages']
+                self.messages[session_id] = [Message(**m) for m in data['messages']]
         except FileNotFoundError:
             print("No memory, starting from scratch")
             pass
@@ -108,7 +112,7 @@ Summary:
         return response
     
     async def add_message(self, role: str, content: str, session_id: str) -> None:
-        self.messages.setdefault(session_id, []).append({"role": role, "content": content})
+        self.messages.setdefault(session_id, []).append(Message(role=role, content=content))
         if len(self.messages[session_id]) > 20:
             await self._summarise(session_id)
         self.save(session_id)
@@ -123,14 +127,9 @@ Summary:
         return "\n".join(history)
     
     def get_history_for_chatbot(self, session_id: str) -> List[Tuple[str, str]]:
-        input_list = self.get_history(session_id)
-        retval = []
-        for i in range(0, len(input_list), 2):
-            try:
-                retval.append((input_list[i], input_list[i+1]))
-            except IndexError:
-                retval.append((input_list[-1], ""))
-        return retval
+        if session_id not in self.messages:
+            self.refresh_from(session_id)
+        return self.messages.setdefault(session_id, [])
     
     def get_context(self, session_id: str) -> str:
         self.refresh_from(session_id)

@@ -173,7 +173,8 @@ class Agent(BaseModel):
     
     async def process_file_input(self, filename: str, history: HistoryType, *args, **kwargs):
         base_filename = os.path.basename(filename)
-        history.append([base_filename, "Thinking..."])
+        history.append(gr.ChatMessage(role="user", content=base_filename))
+        history.append(gr.ChatMessage(role="assistant", content="Thinking..."))
         yield([history, None, None])
         recvQ = asyncio.Queue()
         async with asyncio.TaskGroup() as tg:
@@ -181,15 +182,16 @@ class Agent(BaseModel):
             _prompt_task = tg.create_task(
                 self._agent.prompt_file_with_callback(
                     filename, callback=recvQ.put, session_id=self.session_id, hear_thoughts=settings.hear_thoughts), name="prompt")
-            history[-1] = [base_filename, ""]
+            history[-1].content = ""
             while response := await recvQ.get():
-                history[-1] = [base_filename, history[-1][1] + response.mesg]
+                history[-1].content += response.mesg
                 yield([history] + list(self.speak(response.mesg)))
                 if response.final: # Could also check here if the task is complete?
                     break
         
     async def process_input(self, input: Union[str, bytes], history: HistoryType, *args, **kwargs):
-        history.append([input, "Thinking..."])
+        history.append(gr.ChatMessage(role="user", content=input))
+        history.append(gr.ChatMessage(role="assistant", content="Thinking..."))
         yield(["", history, None, None])
         recvQ = asyncio.Queue()
         async with asyncio.TaskGroup() as tg:
@@ -197,9 +199,9 @@ class Agent(BaseModel):
             _prompt_task = tg.create_task(
                 self._agent.prompt_with_callback(
                     input, callback=recvQ.put, session_id=self.session_id, hear_thoughts=settings.hear_thoughts), name="prompt")
-            history[-1][1] = ''
+            history[-1].content = ''
             while response := await recvQ.get():
-                history[-1][1] += response.mesg
+                history[-1].content += response.mesg
                 yield(["", history] + list(self.speak(response.mesg)))
                 if response.final: # Could also check here if the task is complete?
                     break
@@ -341,8 +343,14 @@ class Agent(BaseModel):
         settings.img_upload_api_key = api_key
         settings.save()
     
-    def get_history_for_chatbot(self):
-        return self._agent.memory.get_history_for_chatbot(self.session_id)
+    def get_history_for_chatbot(self) -> list[gr.ChatMessage]:
+        all_messages = []
+        for message in self._agent.memory.get_history_for_chatbot(self.session_id):
+            if message['role'] == 'Human':
+                all_messages.append(gr.ChatMessage(role='user', content=message['content']))
+            elif message['role'] == 'AI':
+                all_messages.append(gr.ChatMessage(role='assistant', content=message['content']))
+        return all_messages
     
     def update_voice_settings(self, speech_engine, el_api_key, el_voice1, tts_host, tts_port) -> List:
         settings.voice = speech_engine
@@ -388,7 +396,8 @@ class Agent(BaseModel):
         return hear_thoughts
     
     def update_radio(self, prompt: str, history: HistoryType) -> list[str, HistoryType]:
-        history.append([prompt, "Thinking..."])
+        history.append(gr.ChatMessage(role="user", content="prompt"))
+        history.append(gr.ChatMessage(role="assistant", content="Thinking..."))
         return [prompt, history]
     
     async def spotify_login_button(self, code: str, state: str = '') -> str:
@@ -578,7 +587,7 @@ with gr.Blocks(fill_height=True, head='<script src="https://sdk.scdn.co/spotify-
                 mp3_speaker = gr.Audio(interactive=False, visible=False, format='mp3', autoplay=True)
         with gr.Column(scale=8):
             with gr.Tab('ChatBot'):
-                chatbot = gr.Chatbot(agent.get_history_for_chatbot, bubble_full_width=False, show_copy_button=True, height="80vh")
+                chatbot = gr.Chatbot(agent.get_history_for_chatbot(), bubble_full_width=False, show_copy_button=True, height="80vh", type="messages")
                 with gr.Row():
                     txt = gr.Textbox(
                         scale=8,
