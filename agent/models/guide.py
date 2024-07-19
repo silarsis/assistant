@@ -389,7 +389,7 @@ Answer: """
 
     async def response(self, prompt: str, responses: List[Message], **kwargs) -> Message:
         kwargs = {
-            "responses": "\n".join([f"Response {i+1}: " + str(responses[i].mesg) for i in range(len(responses)-1)]),
+            "responses": "\n".join([f"Response {i+1}: " + str(responses[i].mesg) for i in range(len(responses))]),
             "prompt": prompt
         }
         print(kwargs)
