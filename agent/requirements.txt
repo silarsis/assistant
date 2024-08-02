@@ -10,10 +10,11 @@ gradio>=4.38.1
 huggingface_hub
 keychain
 keyring
-langchain-community>=0.2.5
+langchain-community>=0.2.9
 langchain-experimental
 langchain-openai
 langchain>=0.2.5
+langgraph>=0.1.16
 langsmith
 loguru
 markdown
