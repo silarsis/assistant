@@ -3,6 +3,7 @@ bs4
 certifi
 elevenlabs>=1.6.1
 faiss-cpu
+filetype
 frame-sdk
 google-api-python-client
 google-auth-httplib2
@@ -31,7 +32,6 @@ pydantic-settings
 pyhive[presto]
 pypdf
 python-dotenv
-python-magic
 search-engine-parser
 semantic-kernel
 sentence-transformers

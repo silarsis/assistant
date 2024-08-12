@@ -9,6 +9,8 @@ from semantic_kernel.connectors.ai.open_ai.services.azure_chat_completion import
 from semantic_kernel.connectors.ai.open_ai.services.open_ai_chat_completion import AsyncOpenAI as sk_AsyncOpenAI
 from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion, OpenAIChatCompletion
 
+from config import settings
+
 class LLMConnect(BaseModel):
     """
     Connect to any given LLM, whether via langchain, semantic kernel, or other
@@ -108,4 +110,13 @@ class LLMConnect(BaseModel):
                     base_url=self.api_base
                 )
         return client
-    
+
+def llm_from_settings():
+    llmConnector = LLMConnect(
+        api_type=settings.openai_api_type, 
+        api_key=settings.openai_api_key, 
+        api_base=settings.openai_api_base, 
+        deployment_name=settings.openai_deployment_name, 
+        org_id=settings.openai_org_id
+    )
+    return llmConnector

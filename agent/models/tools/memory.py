@@ -1,88 +1,40 @@
-from typing import Optional, List, Tuple, TypedDict, Literal, Required
+from typing import Optional, List, Tuple, TypedDict, Literal
 import os
 import json
 
-import semantic_kernel as sk
-from semantic_kernel.prompt_template.prompt_template_config import PromptTemplateConfig
-from semantic_kernel.prompt_template.input_variable import InputVariable
-
+from models.tools.llm_connect import llm_from_settings
+from config import settings
 
 class Message(TypedDict):
-    role: Literal["Human", "AI"]
-    content: Required[str]
-
-class SummariseConversation:
-    "Designed to summarise a conversation history"
-
-    prompt = """
-Summarise the following conversation history, taking the existing context into account:
-
-Context:
-{{$context}}
-
-History:
-{{$history}}
-
-Summary: """
-
-    def __init__(self, kernel: sk.Kernel, service_id: str = '', character: str = ""):
-        self.kernel = kernel
-        req_settings = kernel.get_service(service_id).get_prompt_execution_settings_class()(service_id=service_id)
-        req_settings.max_tokens = 2000
-        req_settings.temperature = 0.2
-        req_settings.top_p = 0.5
-        self.prompt_template_config = PromptTemplateConfig(
-            template=self.prompt, 
-            name="summarise_conversation", 
-            input_variables=[
-                InputVariable(name="context", description="The context of the conversation", required=True),
-                InputVariable(name="history", description="The chat history", required=True),
-            ],
-            execution_settings=req_settings
-        )
-        self.chat_fn = self.kernel.add_function(
-            function_name="summarise_conversation", 
-            plugin_name="memory",
-            description="Summarise a conversation for an ongoing rolling memory, only used by the memory plugin",
-            prompt_template_config=self.prompt_template_config
-        )
-
-    async def response(self, context: str="", history: str="") -> str:
-        result = await self.kernel.invoke(self.chat_fn, context=context, history=history)
-        return str(result).strip()
+    role: Literal["user", "system", "assistant"]
+    content: str
     
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.role:
+            raise KeyError("Role must be one of 'user', 'system', or 'assistant'")
+        if not self.content:
+            raise ValueError("Content must be a string")
     
-class LocalMemory:
-    context: Optional[str] = None
-    template: str = """
-Summarise the following conversation history, taking the existing context into account:
 
-Context:
-{{$context}}
-
-History:
-{{$history}}
-
-Summary: 
-"""
+class Memory:
+    context: Optional[Message] = None
     
-    def __init__(self, kernel: sk.Kernel=None, service_id: str=''):
-        print("Local Memory")
+    def __init__(self):
         self.context = {}
         self.messages = {}
-        self.kernel = kernel
-        self.summariser = SummariseConversation(kernel, service_id=service_id)
+        self.llm = llm_from_settings().openai(async_client=True)
         
     def refresh_from(self, session_id: str) -> None:
         self.load(session_id)
-        self.context.setdefault(session_id, "")
+        self.context.setdefault(session_id, Message(role="assistant", content=""))
         self.messages.setdefault(session_id, [])
         
     def save(self, session_id: str) -> None:
         # Save messages to a file, fix the error if the dir doesn't exist
         os.makedirs(".data", exist_ok=True)
         data = {
-            'context': self.context.setdefault(session_id, ""),
+            'context': self.context.setdefault(session_id, Message(role="assistant", content="")),
             'messages': self.messages.get(session_id, [])
         }
         with open(f".data/{session_id}.json", "w") as f:
@@ -93,7 +45,10 @@ Summary:
         try:
             with open(f".data/{session_id}.json", "r") as f:
                 data = json.loads(f.read())
-                self.context[session_id] = data['context']
+                try:
+                    self.context[session_id] = Message(**data['context'] or "-")
+                except TypeError:
+                    self.context[session_id] = Message(role="assistant", content=data['context'])
                 self.messages[session_id] = [Message(**m) for m in data['messages']]
         except FileNotFoundError:
             print("No memory, starting from scratch")
@@ -107,12 +62,15 @@ Summary:
         if not contextualise:
             return
         self.messages[session_id] = self.messages[session_id][-10:]
-        response = await self.summariser.response(context=self.context.setdefault(session_id, ""), history="\n".join([f"{message['role']}: {message['content']}" for message in contextualise]))
-        self.context[session_id] = response
-        return response
+        # call the llm, get the results, update the context
+        context=self.context.setdefault(session_id, Message(role="assistant", content=""))
+        prompt = Message(role="system", content="Summarise the following conversation history, taking the existing context into account")
+        response = await self.llm.chat.completions.create(messages=[prompt, context] + contextualise, model=settings.openai_deployment_name)
+        self.context[session_id] = Message(role="assistant", content=response.choices[0].message.content)
+        return self.context[session_id]
     
-    async def add_message(self, role: str, content: str, session_id: str) -> None:
-        self.messages.setdefault(session_id, []).append(Message(role=role, content=content))
+    async def add_message(self, mesg: Message, session_id: str) -> None:
+        self.messages.setdefault(session_id, []).append(Message(role=mesg['role'], content=mesg['content']))
         if len(self.messages[session_id]) > 20:
             await self._summarise(session_id)
         self.save(session_id)
@@ -131,8 +89,6 @@ Summary:
             self.refresh_from(session_id)
         return self.messages.setdefault(session_id, [])
     
-    def get_context(self, session_id: str) -> str:
+    def get_context(self, session_id: str) -> Message:
         self.refresh_from(session_id)
-        return self.context.setdefault(session_id, "")
-    
-Memory = LocalMemory
+        return self.context.setdefault(session_id, Message(role="assistant", content=""))

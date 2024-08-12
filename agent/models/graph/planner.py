@@ -1,6 +1,8 @@
+## This file needs to be reworked to be a planner in langgraph. Still use semantic kernel I think, if it's useful
+
 ## Tools
 from collections.abc import Iterable
-from typing import Optional, Callable, Any, Literal, Union, Annotated
+from typing import Optional, Callable, Any, Literal, Union, List, Annotated
 import asyncio
 
 from pydantic import BaseModel
@@ -18,13 +20,24 @@ from models.graph import guide as graph_guide
 
 # New semantic kernel setup
 import semantic_kernel as sk
+from semantic_kernel.planners.sequential_planner import SequentialPlanner
+from semantic_kernel.exceptions import PlannerException
+
+# from models.plugins.ScrapeText import ScrapeTextPlugin
+from models.plugins.WolframAlpha import WolframAlphaPlugin
+from models.plugins.GoogleDocs import GoogleDocLoaderPlugin
+from models.plugins.GoogleSearch import GoogleSearchPlugin
+from models.plugins.ImageGeneration import ImageGenerationPlugin
+from models.plugins.ScrapeText import ScrapeTextPlugin
+from models.plugins.Tools import ToolsPlugin
+from semantic_kernel.core_plugins import MathPlugin, TextPlugin, TimePlugin
 
 from config import settings
 
 DEFAULT_SESSION_ID = "static"
 
 
-class GuideMesg(BaseModel):
+class Message(BaseModel):
     mesg: str = ""
     type: Literal["request", "response", "thought", "error"] = "request"
     final: bool = False
@@ -37,11 +50,11 @@ class GuideMesg(BaseModel):
             kwargs['mesg'] = args[0] # Allow for init without specifying 'mesg='
         super().__init__(**kwargs)
     
-class Response(GuideMesg):
+class Response(Message):
     type: str = "response"
     final: bool = True
     
-class Thought(GuideMesg):
+class Thought(Message):
     type: str = "thought"
 
 def getKernel(model: Optional[str] = "") -> sk.Kernel:
@@ -63,12 +76,60 @@ def getKernel(model: Optional[str] = "") -> sk.Kernel:
 class Guide:
     def __init__(self, default_character: str):
         print("Initialising Guide")
+        self.service_id, self.guide = getKernel()
+        self._setup_planner()
         self.memory = Memory()
         self.default_character = default_character
-        self.radioQueue = asyncio.Queue()
         print("Guide initialised")
         
-    async def prompt_file_with_callback(self, filename: bytes, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False) -> GuideMesg:
+    def _setup_planner(self):
+        print("Setting up the planner and plugins")
+        self._google_docs = GoogleDocLoaderPlugin(kernel=self.guide)
+        #self.guide.add_plugin(self._google_docs, "gdocs")
+        if settings.wolfram_alpha_appid:
+            self.guide.add_plugin(WolframAlphaPlugin(wolfram_alpha_appid=settings.wolfram_alpha_appid), "wolfram")
+        self.guide.add_plugin(MathPlugin(), "math")
+        self.guide.add_plugin(TimePlugin(), "time")
+        self.guide.add_plugin(TextPlugin(), "text")
+        self.guide.add_plugin(ImageGenerationPlugin(), "image_generation")
+        self.guide.add_plugin(ScrapeTextPlugin(), "scrape_text")
+        self.guide.add_plugin(ToolsPlugin(kernel=self.guide), "tools")
+        self.guide.add_plugin(GoogleSearchPlugin(), "google_search")
+        self.radioQueue = asyncio.Queue()
+        self.guide.add_function(
+            function_name="generate_code", plugin_name="code_generation",
+            description="Generage code from a specification",
+            prompt="You are an expert developer who has a special interest in secure code.\nGenerate code according to the following specifications:\n{{$input}}", 
+            max_tokens=2000, temperature=0.2, top_p=0.5)
+        self.guide.add_plugin(parent_directory="prompts", plugin_name="precanned")
+        
+        self.planner = SequentialPlanner(self.guide, self.service_id)
+        print("Planner created")
+
+    async def _plan(self, goal: str, callback: Callable[[str], None], history_context: str, history: str, session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False) -> Message:
+        try:
+            plan = await self.planner.create_plan(goal)
+            if hear_thoughts:
+                thought = str([(step.name, step.parameters) for step in plan.steps])
+                await callback(Thought(mesg=f"Planning result:\n{thought}\n"))
+            result = await plan.invoke(kernel=self.guide)
+        except PlannerException as e:
+            if e.args and e.args[0] == 'Not possible to create plan for goal with available functions.\n':
+                return Thought(mesg=e.args[0])
+            print(f"Planning failed with PlannerException: {e}")
+            if hear_thoughts:
+                await callback(Thought(mesg=str(e)))
+            result = f"PlannerException: {e.args[0]}"
+        except Exception as e:
+            if e.args and 'APITimeoutError' in e.args[0]:
+                return Thought(mesg="Request timed out - check the network connection to your LLM")
+            print(f"Planning failed: {e}")
+            if hear_thoughts:
+                await callback(Thought(mesg=str(e)))
+            result = f"Exception: {e.args[0]}"
+        return Thought(mesg=str(result))
+
+    async def prompt_file_with_callback(self, filename: bytes, callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False) -> Message:
         if not filename:
             await callback(Response(mesg="No file name was provided. Please provide file data to prompt on.", final=True))
             return
@@ -88,7 +149,7 @@ class Guide:
             final_response = await self.rephrase("describe this image", Thought(mesg=response), history, history_context, session_id=session_id)
             final_response.final = True
             await asyncio.gather(
-                self.memory.add_message(Message(role="assistant", content=final_response.mesg), session_id=session_id),
+                self.memory.add_message(role="assistant", content=final_response.mesg, session_id=session_id),
                 callback(final_response)
             )
             return None
@@ -101,7 +162,7 @@ class Guide:
         callback(Response(mesg=f"Unsupported file type: {type_of_file}", final=True))
         return None
     
-    async def prompt_with_callback(self, prompt: Union[str,bytes], callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> GuideMesg:
+    async def prompt_with_callback(self, prompt: Union[str,bytes], callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> Message:
         if not prompt:
             await callback(Response(mesg="I'm afraid I don't have enough context to respond. Could you please rephrase your question?", final=True))
             return
@@ -121,17 +182,18 @@ class Guide:
         document_store.upload_document(file_data, filename)
         await callback(Response("Document Uploaded", final=True))
 
+    async def update_prompt_template(self, prompt: str, callback: Callable[[str], None], **kwargs) -> str:
+        # self.direct_responder._prompt_templates.set(kwargs.get("session_id", DEFAULT_SESSION_ID), prompt)
+        await callback("Not Done")
+
     def update_google_docs_token(self, token: Any) -> Response:
-        # Won't be working for now
         self._google_docs.set_credentials(token)
         if token:
             return Response(mesg="Logged in")
         else:
             return Response(mesg="Logged out")
         
-    def list_plugins(self) -> dict[str, Any]:
-        # Not working for now
-        return {}
+    def list_plugins(self) -> List[Any]:
         return self.guide.plugins
 
     def documents(self) -> Iterable[Annotated[str, "docid"], Annotated[str, "docname"], Annotated[str, "Full pathname for file"]]:

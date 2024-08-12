@@ -336,7 +336,7 @@ class Agent(BaseModel):
     
     def update_character(self, character: str) -> str:
         self.character = character
-        self._connect(character=character)
+        self._connect()
         return character
     
     def update_img_api_key(self, api_key: str) -> str:
@@ -344,13 +344,7 @@ class Agent(BaseModel):
         settings.save()
     
     def get_history_for_chatbot(self) -> list[gr.ChatMessage]:
-        all_messages = []
-        for message in self._agent.memory.get_history_for_chatbot(self.session_id):
-            if message['role'] == 'Human':
-                all_messages.append(gr.ChatMessage(role='user', content=message['content']))
-            elif message['role'] == 'AI':
-                all_messages.append(gr.ChatMessage(role='assistant', content=message['content']))
-        return all_messages
+        return self._agent.memory.get_history_for_chatbot(self.session_id)
     
     def update_voice_settings(self, speech_engine, el_api_key, el_voice1, tts_host, tts_port) -> List:
         settings.voice = speech_engine
@@ -610,17 +604,6 @@ with gr.Blocks(fill_height=True, head='<script src="https://sdk.scdn.co/spotify-
                 char = gr.Textbox(agent.character, show_copy_button=True, lines=15)
                 char_btn = gr.Button("Update")
                 char_btn.click(agent.update_character, [char], [char])
-            with gr.Tab('Crew') as crew_tab:
-                all_crew =[]
-                with gr.Accordion("Generate New Crew", open=False):
-                    gr.Markdown("WARNING: This will remove all existing crew and generate new ones")
-                    goal = gr.Textbox(label="What do you need your crew to do?", placeholder="Take a url to a system design and generate a threat model for that system", type="text")
-                for crew_num, crew in enumerate(settings.crew):
-                    all_crew.append(render_crew(crew_num, crew))
-                for new_crew_num in range(len(all_crew), 10):
-                    all_crew.append(render_crew(new_crew_num, AgentModel(role='', goal='', backstory='')))
-                all_children = [x for c in all_crew for x in c.children[0].children[1:]]
-                goal.submit(generate_crew, [goal] + all_children, all_children)
             with gr.Tab('Tools'):
                 for plugin_name, plugin in agent.list_plugins().items():
                     with gr.Accordion(plugin_name, open=False):
