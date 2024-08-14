@@ -18,6 +18,7 @@ from config import settings
 class ConfigDict(TypedDict):
     callback: Optional[str]
     hear_thoughts: bool
+    session_id: str
 
 
 def llm():
@@ -37,7 +38,6 @@ async def invoke_llm(messages: List[Message]) -> str:
     return result.choices[0].message.content
 
 class ConversationState(TypedDict):
-    conversation_id: str
     character: str
     prompt: str
     result: Union[str, None]
@@ -47,7 +47,6 @@ class ConversationState(TypedDict):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self['conversation_id'] = self['conversation_id'] or str(uuid.uuid4())
         self['result'] = self['result'] or None
         self['history_context'] = self['history_context'] or Message(role="assistant", content="-")
         self['history'] = self['history'] or []
@@ -55,16 +54,16 @@ class ConversationState(TypedDict):
 
 
 async def initialise(state: ConversationState, config: ConfigDict) -> ConversationState:
-    mem = memory.Memory()
-    state['history_context'] = mem.get_context(session_id=state['conversation_id'])
-    state['history'] = mem.get_history_for_chatbot(session_id=state['conversation_id'])
+    mem = memory.Memory(config['metadata']['session_id'])
+    state['history_context'] = mem.get_context()
+    state['history'] = mem.get_history_for_chatbot()
     state['result'] = None
     return state
 
 async def ask_llm(state: ConversationState, config: ConfigDict) -> ConversationState:
     user_prompt = Message(role="user", content=state['prompt'])
     state['history'].append(user_prompt)
-    await memory.Memory().add_message(user_prompt, session_id=state['conversation_id'])
+    await memory.Memory(config['metadata']['session_id']).add_message(user_prompt)
     messages = [
         Message(role="system", content="Time: " + str(datetime.datetime.now()) + "\n" + state['character']),
         Message(role="assistant", content="Context from docs: " + state['rag_context']),
@@ -123,8 +122,8 @@ entry = conversation.compile()
 
 async def invoke(prompt: str, callback=None, hear_thoughts: bool = False, session_id: str="default", character: str="") -> ConversationState:
     result = await entry.ainvoke(
-        ConversationState(prompt=prompt, conversation_id=session_id, character=character),
-        config=ConfigDict(callback=callback, hear_thoughts=hear_thoughts)
+        ConversationState(prompt=prompt, character=character),
+        config=ConfigDict(callback=callback, hear_thoughts=hear_thoughts, session_id=session_id)
     )
-    await memory.Memory().add_message(Message(role="assistant", content=result['result']), session_id=session_id)
+    await memory.Memory(session_id).add_message(Message(role="assistant", content=result['result']))
     return result['result']

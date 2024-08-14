@@ -63,7 +63,6 @@ def getKernel(model: Optional[str] = "") -> sk.Kernel:
 class Guide:
     def __init__(self, default_character: str):
         print("Initialising Guide")
-        self.memory = Memory()
         self.default_character = default_character
         self.radioQueue = asyncio.Queue()
         print("Guide initialised")
@@ -72,8 +71,6 @@ class Guide:
         if not filename:
             await callback(Response(mesg="No file name was provided. Please provide file data to prompt on.", final=True))
             return
-        history = self.memory.get_formatted_history(session_id=session_id)
-        history_context = self.memory.get_context(session_id=session_id)['content']
         # Now want to decide what to do with the file - if it's a document, rip it apart and store it. If it's an image, send it to OpenAI
         type_of_file = filetype.guess(filename)
         if type_of_file.MIME.startswith("text"):
@@ -85,10 +82,9 @@ class Guide:
             return None
         if type_of_file.MIME.startswith("image"):
             response = upload_image(filename)
-            final_response = await self.rephrase("describe this image", Thought(mesg=response), history, history_context, session_id=session_id)
-            final_response.final = True
+            final_response = Response(role="assistant", content=response)
             await asyncio.gather(
-                self.memory.add_message(Message(role="assistant", content=final_response.mesg), session_id=session_id),
+                Memory(session_id).add_message(Message(role="assistant", content=final_response.mesg)),
                 callback(final_response)
             )
             return None

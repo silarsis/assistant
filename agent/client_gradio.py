@@ -32,6 +32,7 @@ from elevenlabs.client import ElevenLabs
 from elevenlabs.core.api_error import ApiError
 
 from models.tools.llm_connect import LLMConnect
+from models.tools.memory import Memory
 
 from models.guide import Guide, DEFAULT_SESSION_ID
 
@@ -346,7 +347,7 @@ class Agent(BaseModel):
     def get_history_for_chatbot(self) -> list[gr.ChatMessage]:
         return [
             gr.ChatMessage(role=mesg['role'], content=mesg['content'])
-            for mesg in self._agent.memory.get_history_for_chatbot(self.session_id)
+            for mesg in Memory(session_id=self.session_id).get_history_for_chatbot()
         ]
 
     def update_voice_settings(self, speech_engine, el_api_key, el_voice1, tts_host, tts_port) -> List:
