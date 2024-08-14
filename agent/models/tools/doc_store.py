@@ -74,7 +74,7 @@ class DocStore(BaseModel):
     def _get_doc_by_docid(self, docid: str) -> FAISS:
         " Return a FAISS Document for the given docid "
         if not self._already_loaded(docid):
-            self._doc_store[docid] = FAISS.load_local(os.path.join(STORE_DIR, docid), self._embeddings)
+            self._doc_store[docid] = FAISS.load_local(os.path.join(STORE_DIR, docid), self._embeddings, allow_dangerous_deserialization=True)
         return self._doc_store[docid]
 
     def _all_docs(self) -> Iterable[FAISS]:

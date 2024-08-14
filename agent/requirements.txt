@@ -8,7 +8,7 @@ frame-sdk
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
-gradio>=4.40.0
+gradio>=4.41.0
 huggingface_hub
 keychain
 keyring

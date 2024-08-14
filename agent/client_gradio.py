@@ -136,19 +136,19 @@ class Agent(BaseModel):
     session_id: str = DEFAULT_SESSION_ID
     settings_block: Any = None
     _radio: AIRadio = None
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._radio = AIRadio()
         self._connect()
-        
+
     def _connect(self):
         self._agent = Guide(default_character=self.character)
-        
+
     def update_session_id(self, session_id: str) -> str:
         self.session_id = session_id
         return self.session_id
-        
+
     async def process_audio(self, audio_state, audio_data: tuple[int, ArrayLike]):
         if not transcriber:
             print("No transcriber available, skipping audio processing")
@@ -170,7 +170,7 @@ class Agent(BaseModel):
             # We're done listening, time to process
             pass
         return [audio_state, text]
-    
+
     async def process_file_input(self, filename: str, history: HistoryType, *args, **kwargs):
         base_filename = os.path.basename(filename)
         history.append(gr.ChatMessage(role="user", content=base_filename))
@@ -188,7 +188,7 @@ class Agent(BaseModel):
                 yield([history] + list(self.speak(response.mesg)))
                 if response.final: # Could also check here if the task is complete?
                     break
-        
+
     async def process_input(self, input: Union[str, bytes], history: HistoryType, *args, **kwargs):
         history.append(gr.ChatMessage(role="user", content=input))
         history.append(gr.ChatMessage(role="assistant", content="Thinking..."))
@@ -205,17 +205,17 @@ class Agent(BaseModel):
                 yield(["", history] + list(self.speak(response.mesg)))
                 if response.final: # Could also check here if the task is complete?
                     break
-    
+
     async def recv_from_bot(self, response: str):
         print(f"Received via recv_from_bot callback: {response}")
         self._recvQ.put(response)
         # Need to work out how to send this to the chat window
-        
+
     def set_speech_engine(self, value: str) -> str:
         settings.voice = value
         settings.save()
         return value
-    
+
     def _clean_text_for_speech(self, text: str) -> str:
         # Clean up the text for speech
         # First, remove any markdown images
@@ -226,7 +226,7 @@ class Agent(BaseModel):
         code_block = re.compile(r'```(?:.|\n)*?```')
         cleaned = code_block.sub("(I try not to read code aloud, but check the screen)", cleaned)
         return text
-        
+
     def speak(self, payload: str = ''):
         payload = self._clean_text_for_speech(payload)
         if not payload:
@@ -241,10 +241,10 @@ class Agent(BaseModel):
         elif settings.voice == 'OpenAI':
             print("OpenAI TTS")
             client = LLMConnect(
-                api_type=settings.openai_api_type, 
-                api_key=settings.openai_api_key, 
-                api_base=settings.openai_api_base, 
-                deployment_name=settings.openai_deployment_name, 
+                api_type=settings.openai_api_type,
+                api_key=settings.openai_api_key,
+                api_base=settings.openai_api_base,
+                deployment_name=settings.openai_deployment_name,
                 org_id=settings.openai_org_id
             ).openai()
             # Break into max(4096) character chunks here, split by word
@@ -263,7 +263,7 @@ class Agent(BaseModel):
         else:
             print(f"Unknown TTS {settings.voice}")
             return (None, None)
-            
+
     def tts_get_stream(self, text: str) -> bytes:
         q_text = quote(text)
         print("Requesting TTS from Local TTS instance")
@@ -284,7 +284,7 @@ class Agent(BaseModel):
                 stream.stop_stream()
                 stream.close()
                 p.terminate()
-            
+
     def elevenlabs_get_stream(self, text: str = '') -> bytes:
         client = ElevenLabs(api_key=settings.elevenlabs_api_key)
         voices = [settings.elevenlabs_voice_1_id, settings.elevenlabs_voice_2_id]
@@ -293,7 +293,7 @@ class Agent(BaseModel):
         except Exception as err:
             print(str(err), flush=True)
         return audio_stream
-    
+
     def google_login(self, btn: str) -> str:
         # Gets user credentials for Google OAuth and sends them to the agent to authorize access to Google Drive and Docs APIs.
         if btn != "Google Login":
@@ -307,10 +307,10 @@ class Agent(BaseModel):
         )
         response = self._agent.update_google_docs_token(self._google_credentials)
         return response.mesg
-    
+
     def list_plugins(self):
         return self._agent.list_plugins()
-    
+
     def update_api_keys(self, api_type: str, api_key: str, api_base: str, deployment_name: str, org_id: str) -> str:
         settings.openai_api_type = api_type
         settings.openai_api_key = api_key
@@ -320,7 +320,7 @@ class Agent(BaseModel):
         self._connect()
         settings.save()
         return [api_type, api_key, api_base, deployment_name, org_id]
-    
+
     def update_img_api_keys(self, inherit: bool, api_type: str, api_key: str, api_base: str) -> List:
         settings.img_openai_inherit = inherit
         settings.img_openai_api_type = api_type
@@ -333,19 +333,22 @@ class Agent(BaseModel):
             gr.Textbox(label="API Key", value=settings.img_openai_api_key, type="password", visible=(settings.img_openai_inherit is False)),
             gr.Textbox(label="API Base URI", value=settings.img_openai_api_base, type="text", visible=(settings.img_openai_inherit is False))
         ]
-    
+
     def update_character(self, character: str) -> str:
         self.character = character
         self._connect()
         return character
-    
+
     def update_img_api_key(self, api_key: str) -> str:
         settings.img_upload_api_key = api_key
         settings.save()
-    
+
     def get_history_for_chatbot(self) -> list[gr.ChatMessage]:
-        return self._agent.memory.get_history_for_chatbot(self.session_id)
-    
+        return [
+            gr.ChatMessage(role=mesg['role'], content=mesg['content'])
+            for mesg in self._agent.memory.get_history_for_chatbot(self.session_id)
+        ]
+
     def update_voice_settings(self, speech_engine, el_api_key, el_voice1, tts_host, tts_port) -> List:
         settings.voice = speech_engine
         if speech_engine == 'ElevenLabs':
@@ -361,14 +364,14 @@ class Agent(BaseModel):
             gr.Textbox(label="TTS Host", value=settings.tts_host, visible=(settings.voice == 'TTS')),
             gr.Textbox(label="TTS Port", value=settings.tts_port, visible=(settings.voice == 'TTS'))
         ]
-        
+
     def update_presto_settings(self, presto_host: str, presto_username: str, presto_password: str) -> list[str, str, str]:
         settings.presto_host = presto_host
         settings.presto_username = presto_username
         settings.presto_password = presto_password
         settings.save()
         return presto_host, presto_username, presto_password
-        
+
     def update_confluence_settings(self, confluence_uri: str, confluence_pat: str) -> list[str, str]:
         settings.confluence_uri = confluence_uri
         settings.confluence_pat = confluence_pat
@@ -383,17 +386,17 @@ class Agent(BaseModel):
             settings.crew[crew_num] = crew
         settings.save()
         return crew_num, role, goal, backstory
-        
+
     def update_client_settings(self, hear_thoughts: bool) -> bool:
         settings.hear_thoughts = hear_thoughts
         settings.save()
         return hear_thoughts
-    
+
     def update_radio(self, prompt: str, history: HistoryType) -> list[str, HistoryType]:
         history.append(gr.ChatMessage(role="user", content="prompt"))
         history.append(gr.ChatMessage(role="assistant", content="Thinking..."))
         return [prompt, history]
-    
+
     async def spotify_login_button(self, code: str, state: str = '') -> str:
         settings.spotify_client_code = code
         params = {
@@ -410,7 +413,7 @@ class Agent(BaseModel):
         settings.spotify_expiry = auth_response.json()['expires_in'] + time.time() - 5 # 5 seconds before for some buffer
         settings.save()
         return "Logged in - please return to your main page"
-    
+
     def play_pause_radio(self, button: str) -> List:
         if button == "▶️":
             self._agent._radio.play()
@@ -422,7 +425,7 @@ class Agent(BaseModel):
 
     def documents(self) -> Iterable[Annotated[str, "docid"], Annotated[str, "docname"], Annotated[str, "full pathname for file"]]:
         return self._agent.documents()
-    
+
     def delete_document(self, filepaths: str) -> None:
         " Takes a list of files that exist, deletes the rest "
         filenames = [ os.path.basename(filepath) for filepath in filepaths ]
@@ -490,7 +493,7 @@ def spotify_link():
 
 def setup_spotify_login(button: gr.Button):
     demo.app.add_api_route('/spotify_login', agent.spotify_login_button, methods=['GET'])
-    
+
 def radio_tick_mp3(*args, **kwargs):
     try:
         if mp3 := agent._radio._mp3_queue.get_nowait():
@@ -500,7 +503,7 @@ def radio_tick_mp3(*args, **kwargs):
             return [mp3]
     except QueueEmpty:
         return None
-    
+
 def radio_tick_wav(*args, **kwargs):
     try:
         if wav := agent._radio._wav_queue.get_nowait():
@@ -581,7 +584,7 @@ with gr.Blocks(fill_height=True, head='<script src="https://sdk.scdn.co/spotify-
                 mp3_speaker = gr.Audio(interactive=False, visible=False, format='mp3', autoplay=True)
         with gr.Column(scale=8):
             with gr.Tab('ChatBot'):
-                chatbot = gr.Chatbot(agent.get_history_for_chatbot(), bubble_full_width=False, show_copy_button=True, height="80vh", type="messages")
+                chatbot = gr.Chatbot(agent.get_history_for_chatbot, bubble_full_width=False, show_copy_button=True, height="80vh", type="messages")
                 with gr.Row():
                     txt = gr.Textbox(
                         scale=8,
