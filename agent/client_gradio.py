@@ -649,7 +649,7 @@ with gr.Blocks(fill_height=True, head='<script src="https://sdk.scdn.co/spotify-
                 #         doc_view.view(agent.process_file_output, [doc_view, doc_state], [doc_state])
                 # Render a row for uploading a new file
                 with gr.Row():
-                    doc_upload = gr.File(type="filepath", label="Upload a document", file_types=['text', 'pdf'])
+                    doc_upload = gr.File(type="filepath", label="Upload a document")
                     doc_upload.upload(agent.process_file_input, [doc_upload, chatbot], [chatbot, wav_speaker, mp3_speaker])
                 with gr.Row():
                     wiki_uri = gr.Textbox(label="Wiki URI", type="text", placeholder=settings.confluence_uri)
