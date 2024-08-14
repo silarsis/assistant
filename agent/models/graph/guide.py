@@ -1,4 +1,3 @@
-import uuid
 from typing import List, TypedDict, Union, Literal, Optional
 import datetime
 
@@ -53,7 +52,20 @@ class ConversationState(TypedDict):
         self['rag_context'] = ''
 
 
+STORED_STATES = {}
+
+def save_state(session_id: str, state: ConversationState) -> None:
+    STORED_STATES[session_id] = state
+
+def load_state(session_id: str) -> ConversationState:
+    return STORED_STATES.get(session_id, None)
+
+
 async def initialise(state: ConversationState, config: ConfigDict) -> ConversationState:
+    stored_state = load_state(config['metadata']['session_id'])
+    if stored_state:
+        # Replace existing state with stored one, and carry on with the conversation
+        return stored_state
     mem = memory.Memory(config['metadata']['session_id'])
     state['history_context'] = mem.get_context()
     state['history'] = mem.get_history_for_chatbot()
@@ -74,6 +86,10 @@ async def ask_llm(state: ConversationState, config: ConfigDict) -> ConversationS
 
 async def question(state: ConversationState, config: Optional[dict] = None) -> ConversationState:
     # Send something to the human, then wait for their response
+    # I think this means store the current state somewhere, and return as though we're done, then
+    # on the next query refresh the state and carry on.
+    save_state(config['metadata']['session_id'], state)
+
     return state
 
 async def rag_retrieval(state: ConversationState, config: Optional[dict] = None) -> ConversationState:
@@ -114,7 +130,7 @@ conversation.add_edge(START, "initialise")
 conversation.add_edge("initialise", "rag_retrieval")
 conversation.add_edge("rag_retrieval", "ask_llm")
 conversation.add_conditional_edges("ask_llm", check_if_answered)
-conversation.add_edge("question", "ask_llm") # This should be something else, I think
+conversation.add_edge("question", END)
 conversation.add_edge("reword", END)
 
 entry = conversation.compile()
