@@ -4,6 +4,8 @@ import json
 
 from config import settings
 
+# Should be able to work this into the graph now
+
 
 def upload_image(image_path: str) -> str:
     # Getting the base64 string
@@ -38,7 +40,7 @@ def upload_image(image_path: str) -> str:
     }
 
     # This should be async
-    response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+    response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=60)
     try:
         return response.json()['choices'][0]['message']['content']
     except (IndexError, KeyError) as e:
