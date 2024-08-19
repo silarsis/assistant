@@ -424,15 +424,15 @@ class Agent(BaseModel):
             button = '▶️'
         return button
 
-    def documents(self) -> Iterable[Annotated[str, "docid"], Annotated[str, "docname"], Annotated[str, "full pathname for file"]]:
+    def documents(self) -> Iterable[Annotated[str, "docname"], Annotated[str, "full pathname for file"]]:
         return self._agent.documents()
 
     def delete_document(self, filepaths: str) -> None:
         " Takes a list of files that exist, deletes the rest "
         filenames = [ os.path.basename(filepath) for filepath in filepaths ]
-        for docid, _, _ in self._agent.documents():
-            if docid not in filenames:
-                self._agent.delete_document(docid)
+        for docname, _pathname in self._agent.documents():
+            if docname not in filenames:
+                self._agent.delete_document(docname)
 
     async def search_wiki(self, cql: str, history: HistoryType = []) -> str:
         uri = urllib.parse.urljoin(settings.confluence_uri, "wiki/rest/api/content/search")
@@ -631,27 +631,19 @@ with gr.Blocks(fill_height=True, head='<script src="https://sdk.scdn.co/spotify-
                             + '\n* '.join([f"{plugin_name}.{f_name} - {plugin.functions[f_name].description}" for plugin_name, plugin in agent.list_plugins().items() for f_name in plugin.functions])
                             + "\n\nGenerate a list of steps for the following task, where each step specifies the input, the tool or tools to be used, and the expected output."
                             + '\n\nThe task is: Generate a threat model for the system design described at the following URL: <url>')
-            with gr.Tab('Documents'):
+            with gr.Tab('Memories'):
                 docs_trigger = gr.State(1)
                 with gr.Row():
+                    doc_upload = gr.File(type="filepath", label="Upload a document")
+                    doc_upload.upload(agent.process_file_input, [doc_upload, chatbot], [chatbot, wav_speaker, mp3_speaker])
                     gr.Button("Refresh", scale=1).click(lambda x: x + 1, docs_trigger, docs_trigger)
                 @gr.render(inputs=docs_trigger)
                 def render_documents(docs_trigger):
                     files = agent.documents()
                     with gr.Row():
-                        file_box = gr.File(file_count="multiple", type="filepath", value=[x[2] for x in files], interactive=True, key="doc_organiser")
+                        file_box = gr.File(file_count="multiple", type="filepath", value=[x[1] for x in files], interactive=True, key="doc_organiser")
                         file_box.upload(agent.process_file_input, [file_box, chatbot], [chatbot, wav_speaker, mp3_speaker]) # Need to output to file_box also
                         file_box.delete(agent.delete_document, [file_box])
-                #         doc_delete = gr.Button("❌", scale=1)
-                #         doc_delete.click(agent.delete_document, [doc_num])
-                #         doc_download = gr.Download(label="Download")
-                #         doc_download.download(agent.process_file_output, [doc_download, doc_state], [doc_state])
-                #         doc_view = gr.FileViewer(label="View")
-                #         doc_view.view(agent.process_file_output, [doc_view, doc_state], [doc_state])
-                # Render a row for uploading a new file
-                with gr.Row():
-                    doc_upload = gr.File(type="filepath", label="Upload a document")
-                    doc_upload.upload(agent.process_file_input, [doc_upload, chatbot], [chatbot, wav_speaker, mp3_speaker])
                 with gr.Row():
                     wiki_uri = gr.Textbox(label="Wiki URI", type="text", placeholder=settings.confluence_uri)
                 with gr.Row():
