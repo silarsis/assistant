@@ -172,7 +172,13 @@ class Agent(BaseModel):
             pass
         return [audio_state, text]
 
-    async def process_file_input(self, filename: str, history: HistoryType, *args, **kwargs):
+    async def process_file_input_memories(self, filename: str, *args, **kwargs):
+        response = await self._agent.remember_file(filename)
+        # Can we alert with the response here?
+        gr.Info(response.mesg)
+        return [ fn for dn, fn in self.documents() if dn == os.path.basename(filename) ][0]
+
+    async def process_file_input_inline(self, filename: str, history: HistoryType, *args, **kwargs):
         base_filename = os.path.basename(filename)
         history.append(gr.ChatMessage(role="user", content=base_filename))
         history.append(gr.ChatMessage(role="assistant", content="Thinking..."))
@@ -185,15 +191,18 @@ class Agent(BaseModel):
                     filename, callback=recvQ.put, session_id=self.session_id, hear_thoughts=settings.hear_thoughts), name="prompt")
             history[-1].content = ""
             while response := await recvQ.get():
+                if response.final:
+                    async for result in self.process_input(response.mesg, history, *args, **kwargs):
+                        yield result
+                    break
                 history[-1].content += response.mesg
                 yield([history] + list(self.speak(response.mesg)))
-                if response.final: # Could also check here if the task is complete?
-                    break
+
 
     async def process_input(self, input: Union[str, bytes], history: HistoryType, *args, **kwargs):
         history.append(gr.ChatMessage(role="user", content=input))
         history.append(gr.ChatMessage(role="assistant", content="Thinking..."))
-        yield(["", history, None, None])
+        yield([history, None, None])
         recvQ = asyncio.Queue()
         async with asyncio.TaskGroup() as tg:
             # Assigned to a variable to keep it in scope so the task doesn't get deleted too early
@@ -203,7 +212,7 @@ class Agent(BaseModel):
             history[-1].content = ''
             while response := await recvQ.get():
                 history[-1].content += response.mesg
-                yield(["", history] + list(self.speak(response.mesg)))
+                yield([history] + list(self.speak(response.mesg)))
                 if response.final: # Could also check here if the task is complete?
                     break
 
@@ -443,7 +452,7 @@ class Agent(BaseModel):
         with tempfile.NamedTemporaryFile(mode='w', delete=False) as tfile:
             tfile.write(results.text)
             filename = tfile.name
-        input_result = self.process_file_input(filename, history)
+        input_result = self.process_file_input_memories(filename)
         os.unlink(filename)
         return input_result
 
@@ -593,11 +602,11 @@ with gr.Blocks(fill_height=True, head='<script src="https://sdk.scdn.co/spotify-
                         placeholder="Enter text and press enter",
                         container=False,
                     )
-                    txt.submit(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
+                    txt.submit(agent.process_input, [txt, chatbot], [chatbot, wav_speaker, mp3_speaker])
                     submit_btn = gr.Button("▶️", scale=1)
-                    submit_btn.click(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
+                    submit_btn.click(agent.process_input, [txt, chatbot], [chatbot, wav_speaker, mp3_speaker])
                     btn = gr.UploadButton("📁", type="filepath", scale=1)
-                    btn.upload(agent.process_file_input, [btn, chatbot], [chatbot, wav_speaker, mp3_speaker])
+                    btn.upload(agent.process_file_input_inline, [btn, chatbot], [chatbot, wav_speaker, mp3_speaker])
                 # with gr.Row():
                 #     audio_state = gr.State()
                 #     audio = gr.Audio(sources="microphone", streaming=True, autoplay=True)
@@ -635,14 +644,13 @@ with gr.Blocks(fill_height=True, head='<script src="https://sdk.scdn.co/spotify-
                 docs_trigger = gr.State(1)
                 with gr.Row():
                     doc_upload = gr.File(type="filepath", label="Upload a document")
-                    doc_upload.upload(agent.process_file_input, [doc_upload, chatbot], [chatbot, wav_speaker, mp3_speaker])
+                    doc_upload.upload(agent.process_file_input_memories, doc_upload, doc_upload)
                     gr.Button("Refresh", scale=1).click(lambda x: x + 1, docs_trigger, docs_trigger)
                 @gr.render(inputs=docs_trigger)
                 def render_documents(docs_trigger):
                     files = agent.documents()
                     with gr.Row():
                         file_box = gr.File(file_count="multiple", type="filepath", value=[x[1] for x in files], interactive=True, key="doc_organiser")
-                        file_box.upload(agent.process_file_input, [file_box, chatbot], [chatbot, wav_speaker, mp3_speaker]) # Need to output to file_box also
                         file_box.delete(agent.delete_document, [file_box])
                 with gr.Row():
                     wiki_uri = gr.Textbox(label="Wiki URI", type="text", placeholder=settings.confluence_uri)

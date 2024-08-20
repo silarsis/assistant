@@ -1,15 +1,22 @@
+import base64
+import filetype
+import functools
 import os
 import shutil
 
-from pydantic import BaseModel
 from collections.abc import Iterable
+from pydantic import BaseModel
+from pypdf import PdfReader
 from typing import Annotated, Optional
 
 from langchain_core.documents import BaseDocumentTransformer
 # from langchain_experimental.text_splitter import SemanticChunker
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from models.tools.llm_connect import LLMConnect
+
+# Needed for image handling
+from models.tools.llm_connect import llm_from_settings
+from models.tools.memory import Message
 
 from config import settings
 
@@ -18,40 +25,88 @@ RAW_FILE_DIR = 'raw_files'
 METADATA_FILENAME = 'document_metadata.json'
 
 
+class Document(BaseModel):
+    filename: str
+    _text: str = None
+
+    class Config:
+        arbitrary_types_allowed = True
+        frozen = True
+
+    def __init__(self, filename: str):
+        super().__init__(filename=filename)
+
+    @property
+    async def file_text(self) -> str:
+        if not self.filename:
+            raise KeyError("No file name was provided. Please provide file data to prompt on.")
+        if self._text:
+            return self._text
+        type_of_file = filetype.guess(self.filename)
+        if type_of_file is None:
+            raise KeyError("Could not load the file - make sure it has no special characters in the name")
+        if type_of_file.MIME.startswith("text"):
+            with open(self.filename, "r") as f:
+                self._text = f.read()
+            return self._text
+        if type_of_file.MIME.startswith("image"):
+            base64_image = base64.b64encode(self.file_data()).decode('utf-8')
+            response = await llm_from_settings().openai(async_client=True).chat.completions.create(
+                model=settings.openai_deployment_name,
+                messages=[Message(role="user", content=[
+                    {
+                        "type": "text",
+                        "text": "Please describe this image in as much detail as necessary to be able to accurately recreate it from just the description. If this is a diagram, be sure to capture all aspects of the diagram. If it's a picture, be as descriptive as possible."
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": { "url": f"data:image/jpeg;base64,{base64_image}" }
+                    }
+                ])]
+            )
+            self._text = response.choices[0].message.content
+            return self._text
+        if type_of_file.MIME == "application/pdf":
+            pdf = PdfReader(self.filename)
+            self._text = '\n'.join([page.extract_text() for page in pdf.pages])
+            return self._text
+        raise ValueError("Unsupported file type: {type_of_file}")
+
+    @functools.cached_property
+    def file_data(self) -> bytes:
+        return open(self.filename, 'rb').read()
+
+    @functools.cached_property
+    def saved_filename(self) -> str:
+        docname = os.path.basename(self.filename)
+        filename = os.path.join(STORE_DIR, RAW_FILE_DIR, docname)
+        return filename
+
+    async def save(self) -> None:
+        os.makedirs(os.path.join(STORE_DIR, RAW_FILE_DIR), exist_ok=True)
+        with open(self.saved_filename + '.txt', 'w') as fd:
+            fd.write(await self.file_text)
+        if os.path.isfile(self.filename):
+            shutil.move(self.filename, self.saved_filename)
+
+
 class DocStore(BaseModel):
     _embeddings = None
     _text_splitter: BaseDocumentTransformer = None
-    _doc_store: dict = {}
     _metadata_filename = os.path.join(STORE_DIR, METADATA_FILENAME)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        llmConnector = LLMConnect(
-            api_type=settings.openai_api_type,
-            api_key=settings.openai_api_key,
-            api_base=settings.openai_api_base,
-            deployment_name=settings.openai_deployment_name,
-            org_id=settings.openai_org_id
-        )
+        llmConnector = llm_from_settings()
         self._embeddings = llmConnector.embeddings()
         self._text_splitter = RecursiveCharacterTextSplitter()
         # self._text_splitter = SemanticChunker(self._embeddings)
         # Setup the FAISS repository of docs
         os.makedirs(STORE_DIR, exist_ok=True)
 
-    def _store_doc(self, docname: str, doc: str, full_docname: str):
-        " Store the raw file post transform to text "
-        os.makedirs(os.path.join(STORE_DIR, RAW_FILE_DIR), exist_ok=True)
-        with open(os.path.join(STORE_DIR, RAW_FILE_DIR, docname + '.txt'), 'w') as fd:
-            fd.write(doc)
-        if os.path.isfile(full_docname):
-            shutil.move(full_docname, os.path.join(STORE_DIR, RAW_FILE_DIR, docname))
-
     def _already_loaded(self, docname: str) -> bool:
         " Is this doc already loaded? "
-        if docname in self._doc_store:
-            return True
-        return False
+        return docname in self._all_docnames()
 
     def _all_docnames(self) -> Iterable[str]:
         " List all known docs "
@@ -59,9 +114,7 @@ class DocStore(BaseModel):
 
     def _get_doc_by_docname(self, docname: str) -> FAISS:
         " Return a FAISS Document for the given docid "
-        if not self._already_loaded(docname):
-            self._doc_store[docname] = FAISS.load_local(os.path.join(STORE_DIR, docname), self._embeddings, allow_dangerous_deserialization=True)
-        return self._doc_store[docname]
+        return FAISS.load_local(os.path.join(STORE_DIR, docname), self._embeddings, allow_dangerous_deserialization=True)
 
     def _all_docs(self) -> Iterable[FAISS]:
         for docname in self._all_docnames():
@@ -70,25 +123,21 @@ class DocStore(BaseModel):
     def query(self, query: str) -> list[str]:
         return list(self.search_for_phrases(query))
 
-    def upload_document(self, doc: str, docname: str) -> Annotated[str, "Document ID"]:
+    async def upload_document(self, doc: Document) -> Annotated[str, "Document ID"]:
         " Takes an entire document as a string, breaks it into elements and saves it in a vectordb "
-        if self._already_loaded(docname):
-            return
+        base_docname = os.path.basename(doc.filename)
+        if base_docname in self._all_docnames():
+            return base_docname
         # Really should either hint or figure out the best method for chunking different doc types.
-        base_docname = os.path.basename(docname)
-        split_docs = self._text_splitter.split_text(doc)
+        split_docs = self._text_splitter.split_text(await doc.file_text)
         docs = self._text_splitter.create_documents(split_docs, metadatas=[{'docname': base_docname}] * len(split_docs))
-        self._doc_store[docname] = FAISS.from_documents(docs, self._embeddings)
-        self._doc_store[docname].save_local(os.path.join(STORE_DIR, base_docname))
-        self._store_doc(base_docname, doc, docname)
+        FAISS.from_documents(docs, self._embeddings).save_local(os.path.join(STORE_DIR, base_docname))
+        await doc.save()
         return base_docname
 
     def delete_document(self, docname: str):
         " Delete the document from the store "
-        if not self._already_loaded(docname):
-            return
-        self._doc_store[docname].delete_local()
-        del self._doc_store[docname]
+        self._get_doc_by_docname(docname).delete_local()  # This feels a little overkill, load to delete
         os.remove(os.path.join(STORE_DIR, RAW_FILE_DIR, docname))
 
     def list_documents(self) -> Iterable[Annotated[str, "docname"], Annotated[str, "Full path for file"]]:
