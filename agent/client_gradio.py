@@ -193,7 +193,7 @@ class Agent(BaseModel):
             while response := await recvQ.get():
                 if response.final:
                     async for result in self.process_input(response.mesg, history, *args, **kwargs):
-                        yield result
+                        yield result[1:]
                     break
                 history[-1].content += response.mesg
                 yield([history] + list(self.speak(response.mesg)))
@@ -202,7 +202,7 @@ class Agent(BaseModel):
     async def process_input(self, input: Union[str, bytes], history: HistoryType, *args, **kwargs):
         history.append(gr.ChatMessage(role="user", content=input))
         history.append(gr.ChatMessage(role="assistant", content="Thinking..."))
-        yield([history, None, None])
+        yield(["", history, None, None])
         recvQ = asyncio.Queue()
         async with asyncio.TaskGroup() as tg:
             # Assigned to a variable to keep it in scope so the task doesn't get deleted too early
@@ -212,7 +212,7 @@ class Agent(BaseModel):
             history[-1].content = ''
             while response := await recvQ.get():
                 history[-1].content += response.mesg
-                yield([history] + list(self.speak(response.mesg)))
+                yield(["", history] + list(self.speak(response.mesg)))
                 if response.final: # Could also check here if the task is complete?
                     break
 
@@ -602,9 +602,9 @@ with gr.Blocks(fill_height=True, head='<script src="https://sdk.scdn.co/spotify-
                         placeholder="Enter text and press enter",
                         container=False,
                     )
-                    txt.submit(agent.process_input, [txt, chatbot], [chatbot, wav_speaker, mp3_speaker])
+                    txt.submit(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
                     submit_btn = gr.Button("▶️", scale=1)
-                    submit_btn.click(agent.process_input, [txt, chatbot], [chatbot, wav_speaker, mp3_speaker])
+                    submit_btn.click(agent.process_input, [txt, chatbot], [txt, chatbot, wav_speaker, mp3_speaker])
                     btn = gr.UploadButton("📁", type="filepath", scale=1)
                     btn.upload(agent.process_file_input_inline, [btn, chatbot], [chatbot, wav_speaker, mp3_speaker])
                 # with gr.Row():
