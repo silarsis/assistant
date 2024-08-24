@@ -22,7 +22,7 @@ class ConfigDict(TypedDict):
 
 async def invoke_llm(messages: List[Message]) -> str:
     try:
-        result = llm_from_settings().openai(async_client=True).chat.completions.create(messages=messages, model=settings.openai_deployment_name)
+        result = await llm_from_settings().openai(async_client=True).chat.completions.create(messages=messages, model=settings.openai_deployment_name)
     except openai.OpenAIError as e:
         print(f"Failed to invoke LLM: {e}")
         return e.message
