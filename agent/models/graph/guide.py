@@ -20,18 +20,14 @@ class ConfigDict(TypedDict):
     session_id: str
 
 
-def llm():
-    return llm_from_settings().openai(async_client=True)
-
-
 async def invoke_llm(messages: List[Message]) -> str:
     try:
-        # result = llm_from_settings().openai().chat.completions.create(messages=messages, model=settings.openai_deployment_name)
-        result = await llm().chat.completions.create(messages=messages, model=settings.openai_deployment_name)
+        result = llm_from_settings().openai(async_client=True).chat.completions.create(messages=messages, model=settings.openai_deployment_name)
     except openai.OpenAIError as e:
         print(f"Failed to invoke LLM: {e}")
         return e.message
     return result.choices[0].message.content
+
 
 class ConversationState(TypedDict):
     character: str
@@ -47,7 +43,6 @@ class ConversationState(TypedDict):
         self['history_context'] = self['history_context'] or Message(role="assistant", content="-")
         self['history'] = self['history'] or []
         self['rag_context'] = ''
-
 
 STORED_STATES = {}
 
@@ -86,7 +81,6 @@ async def question(state: ConversationState, config: Optional[dict] = None) -> C
     # I think this means store the current state somewhere, and return as though we're done, then
     # on the next query refresh the state and carry on.
     save_state(config['metadata']['session_id'], state)
-
     return state
 
 def rag_retrieval(state: ConversationState, config: Optional[dict] = None) -> ConversationState:
