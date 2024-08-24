@@ -92,7 +92,7 @@ async def question(state: ConversationState, config: Optional[dict] = None) -> C
 
     return state
 
-async def rag_retrieval(state: ConversationState, config: Optional[dict] = None) -> ConversationState:
+def rag_retrieval(state: ConversationState, config: Optional[dict] = None) -> ConversationState:
     # Call the docstore with a retrieval query, dump the results into the state as context for the next query
     state['rag_context'] = '\n'.join(doc_store.DocStore().search_for_phrases(state['prompt']))
     return state
