@@ -137,8 +137,20 @@ class DocStore(BaseModel):
 
     def delete_document(self, docname: str):
         " Delete the document from the store "
-        self._get_doc_by_docname(docname).delete_local()  # This feels a little overkill, load to delete
-        os.remove(os.path.join(STORE_DIR, RAW_FILE_DIR, docname))
+        doc = self._get_doc_by_docname(docname)
+        doc.delete(doc.index_to_docstore_id.values()) # This doesn't delete the FAISS object itself, just all the contents
+        try:
+            shutil.rmtree(os.path.join(STORE_DIR, docname))
+        except FileNotFoundError:
+            pass # Already not there
+        try:
+            os.remove(os.path.join(STORE_DIR, RAW_FILE_DIR, docname))
+        except FileNotFoundError:
+            pass # Already not there
+        try:
+            os.remove(os.path.join(STORE_DIR, RAW_FILE_DIR, docname + '.txt'))
+        except FileNotFoundError:
+            pass # Already not there
 
     def list_documents(self) -> Iterable[Annotated[str, "docname"], Annotated[str, "Full path for file"]]:
         " Return a list of documents "
