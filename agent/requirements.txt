@@ -21,7 +21,7 @@ langsmith
 loguru
 markdown
 nest_asyncio
-numpy
+numpy==1.26.4
 openai
 opentelemetry-api
 opentelemetry-exporter-otlp
@@ -36,5 +36,5 @@ search-engine-parser
 semantic-kernel
 sentence-transformers
 torchaudio
-websockets
+websockets==12.0
 wolframalpha

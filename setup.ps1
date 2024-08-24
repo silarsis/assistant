@@ -4,14 +4,12 @@ $repo_url = "https://github.com/silarsis/assistant.git"
 # Define the directory name
 $dir_name = "assistant"
 
-# Define the virtual environment name
-$venv_name = ".venv"
-
-# Define the requirements file path
-$requirements_file = "agent/requirements.txt"
-
 # Define the python script to run
 $python_script = "./client_gradio.py"
+
+# Check the current dir name in case we're already in the repo
+$current_dir_name = Split-Path -Leaf (Get-Location)
+
 
 # Check if git is installed
 if (!(Get-Command git -ErrorAction SilentlyContinue)) {
@@ -40,36 +38,24 @@ if ($current_dir_name -ne $dir_name) {
     Set-Location -Path $dir_name
 }
 
-# Create the virtual environment
-if (-Not (Test-Path -Path $venv_name -PathType Container)) {
-    try {
-        python -m venv create $venv_name
-    } catch {
-        Write-Host "Failed to create the virtual environment. Please check your Python installation and try again."
-        exit 1
+# Check if poetry is installed
+if (!(Get-Command poetry -ErrorAction SilentlyContinue)) {
+    if (-Not (Get-Command pipx -ErrorAction SilentlyContinue)) {
+        if (-Not (Get-Command scoop -ErrorAction SilentlyContinue)) {
+            Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+        }
+        scoop install pipx
+        pipx ensurepath
     }
-}
-
-# Activate the virtual environment
-. $venv_name/bin/activate
-
-# Check if pip is installed
-if (!(Get-Command pip -ErrorAction SilentlyContinue)) {
-    Write-Host "Pip is not installed. Please install it and try again."
-    exit 1
-}
-
-# Install the requirements
-try {
-    python -m pip install -U --upgrade-strategy eager --force-reinstall -r $requirements_file
-} catch {
-    Write-Host "Failed to install the requirements. Please check the requirements file and try again."
-    exit 1
+    pipx install poetry
 }
 
 # Change to the agent directory
 Set-Location -Path agent
 
+# Install the requirements
+poetry install
+
 Write-Host "The assistant is now ready to be used."
-Write-Host "To start the assistant, run the following command:"
-Write-Host "python $python_script"
+Write-Host "To start the assistant, run the following commands:"
+Write-Host "poetry run python $python_script"
