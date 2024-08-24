@@ -302,6 +302,7 @@ class Agent(BaseModel):
             audio_stream = client.generate(text=text, voice=voices[0], stream=True)
         except Exception as err:
             print(str(err), flush=True)
+            return b''
         return audio_stream
 
     def google_login(self, btn: str) -> str:
