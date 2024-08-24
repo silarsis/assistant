@@ -34,6 +34,9 @@ async def invoke_llm(messages: List[Message]) -> str:
     except openai.APIConnectionError as e:
         print(f"Failed to connect to OpenAI: {e}")
         return e.message
+    except openai.AuthenticationError as e:
+        print(f"Failed to authenticate with OpenAI: {e}")
+        return e.message
     return result.choices[0].message.content
 
 class ConversationState(TypedDict):
