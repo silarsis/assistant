@@ -28,14 +28,8 @@ async def invoke_llm(messages: List[Message]) -> str:
     try:
         # result = llm_from_settings().openai().chat.completions.create(messages=messages, model=settings.openai_deployment_name)
         result = await llm().chat.completions.create(messages=messages, model=settings.openai_deployment_name)
-    except openai.BadRequestError as e:
+    except openai.OpenAIError as e:
         print(f"Failed to invoke LLM: {e}")
-        return e.message
-    except openai.APIConnectionError as e:
-        print(f"Failed to connect to OpenAI: {e}")
-        return e.message
-    except openai.AuthenticationError as e:
-        print(f"Failed to authenticate with OpenAI: {e}")
         return e.message
     return result.choices[0].message.content
 
