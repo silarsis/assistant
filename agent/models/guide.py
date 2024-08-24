@@ -8,7 +8,7 @@ from pydantic import BaseModel
 # from models.tools import apify
 from models.tools.doc_store import DocStore, Document
 from models.tools.llm_connect import LLMConnect
-from models.graph import guide as graph_guide
+from models.graph import guide as graph_guide #, upload as upload_guide
 
 # New semantic kernel setup
 import semantic_kernel as sk
@@ -76,7 +76,17 @@ class Guide:
         except (KeyError, ValueError) as exc:
             await callback(Response(mesg=str(exc)))
             return
+        # Commenting out until I can get the flow right
+        # final_response = await upload_guide.invoke(
+        #     doc.file_text,
+        #     callback,
+        #     hear_thoughts=hear_thoughts,
+        #     session_id=session_id,
+        #     character=self.default_character
+        # )
+        # await callback(Response(final_response))
         await callback(Response(mesg=await doc.file_text))
+        return None
 
     async def prompt_with_callback(self, prompt: Union[str,bytes], callback: Callable[[str], None], session_id: str = DEFAULT_SESSION_ID, hear_thoughts: bool = False, **kwargs) -> GuideMesg:
         if not prompt:
