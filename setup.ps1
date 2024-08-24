@@ -25,23 +25,29 @@ if (!(Get-Command python -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-# Clone the repository
-try {
-    git clone $repo_url
-} catch {
-    Write-Host "Failed to clone the repository. Please check the URL and try again."
-    exit 1
+# Clone the repository if it doesn't exist
+if (-Not (Test-Path -Path $dir_name -PathType Container) -and ($current_dir_name -ne $dir_name)) {
+    try {
+        git clone $repo_url
+    } catch {
+        Write-Host "Failed to clone the repository. Please check the URL and try again."
+        exit 1
+    }
 }
 
 # Change to the directory
-Set-Location -Path $dir_name
+if ($current_dir_name -ne $dir_name) {
+    Set-Location -Path $dir_name
+}
 
 # Create the virtual environment
-try {
-    python -m venv create $venv_name
-} catch {
-    Write-Host "Failed to create the virtual environment. Please check your Python installation and try again."
-    exit 1
+if (-Not (Test-Path -Path $venv_name -PathType Container)) {
+    try {
+        python -m venv create $venv_name
+    } catch {
+        Write-Host "Failed to create the virtual environment. Please check your Python installation and try again."
+        exit 1
+    }
 }
 
 # Activate the virtual environment
