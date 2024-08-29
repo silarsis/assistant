@@ -22,7 +22,7 @@
                 "./client_gradio.py"
             ],
             "env": {
-                "PYDEVD_DISABLE_FILE_VALIDATION": 1
+                "PYDEVD_DISABLE_FILE_VALIDATION": "1"
             },
             "justMyCode": false,
             "envFile": "${workspaceFolder}/agent/.env"
