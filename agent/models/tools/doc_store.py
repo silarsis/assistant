@@ -3,11 +3,14 @@ import filetype
 import functools
 import os
 import shutil
+import traceback
 
 from collections.abc import Iterable
 from pydantic import BaseModel
 from pypdf import PdfReader
 from typing import Annotated, Optional
+
+from openai import OpenAIError
 
 from langchain_core.documents import BaseDocumentTransformer
 # from langchain_experimental.text_splitter import SemanticChunker
@@ -50,20 +53,26 @@ class Document(BaseModel):
                 self._text = f.read()
             return self._text
         if type_of_file.MIME.startswith("image"):
-            base64_image = base64.b64encode(self.file_data()).decode('utf-8')
-            response = await llm_from_settings().openai(async_client=True).chat.completions.create(
-                model=settings.openai_deployment_name,
-                messages=[Message(role="user", content=[
-                    {
-                        "type": "text",
-                        "text": "Please describe this image in as much detail as necessary to be able to accurately recreate it from just the description. If this is a diagram, be sure to capture all aspects of the diagram. If it's a picture, be as descriptive as possible."
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": { "url": f"data:image/jpeg;base64,{base64_image}" }
-                    }
-                ])]
-            )
+            base64_image = base64.b64encode(self.file_data).decode('utf-8')
+            # Find the type of image - is it a flowchart, a gantt chart, or whatever else
+            # Then, based on that type, analyze it and return text
+            try:
+                response = await llm_from_settings().openai(async_client=True).chat.completions.create(
+                    model=settings.openai_deployment_name,
+                    messages=[Message(role="user", content=[
+                        {
+                            "type": "text",
+                            "text": "Hey there, AI! An image has just been uploaded for analysis. Let's assume the image contains complex features, details, and structures. Could you please perform a deep analysis of this uploaded image and produce a detailed textual description? I want you to capture all the essential elements, colors, patterns, objects, orientations, and interactions within this image. The aim is to create a description so comprehensive that someone could recreate a highly similar image based solely on your textual output. Don't leave out any crucial details that contribute to the overall composition of the image. Ready to get started?"
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": { "url": f"data:image/jpeg;base64,{base64_image}" }
+                        }
+                    ])]
+                )
+            except OpenAIError as e:
+                print(f"Error uploading image:\n{traceback.format_exc()}")
+                return e.message
             self._text = response.choices[0].message.content
             return self._text
         if type_of_file.MIME == "application/pdf":

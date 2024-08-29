@@ -1,5 +1,6 @@
 from typing import List, TypedDict, Union, Literal, Optional
 import datetime
+import traceback
 
 # from langgraph.constants import Send
 from langgraph.graph import START, END, StateGraph
@@ -21,11 +22,7 @@ class ConfigDict(TypedDict):
 
 
 async def invoke_llm(messages: List[Message]) -> str:
-    try:
-        result = await llm_from_settings().openai(async_client=True).chat.completions.create(messages=messages, model=settings.openai_deployment_name)
-    except openai.OpenAIError as e:
-        print(f"Failed to invoke LLM: {e}")
-        return e.message
+    result = await llm_from_settings().openai(async_client=True).chat.completions.create(messages=messages, model=settings.openai_deployment_name)
     return result.choices[0].message.content
 
 
@@ -128,9 +125,13 @@ entry = conversation.compile()
 
 
 async def invoke(prompt: str, callback=None, hear_thoughts: bool = False, session_id: str="default", character: str="") -> ConversationState:
-    result = await entry.ainvoke(
-        ConversationState(prompt=prompt, character=character),
-        config=ConfigDict(callback=callback, hear_thoughts=hear_thoughts, session_id=session_id)
-    )
+    try:
+        result = await entry.ainvoke(
+            ConversationState(prompt=prompt, character=character),
+            config=ConfigDict(callback=callback, hear_thoughts=hear_thoughts, session_id=session_id)
+        )
+    except openai.OpenAIError as e:
+        print(f"OpenAI error:\n{traceback.format_exc()}")
+        return e.message
     await memory.Memory(session_id).add_message(Message(role="assistant", content=result['result']))
     return result['result']
