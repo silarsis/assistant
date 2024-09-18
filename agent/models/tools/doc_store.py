@@ -62,7 +62,7 @@ class Document(BaseModel):
                     messages=[Message(role="user", content=[
                         {
                             "type": "text",
-                            "text": "Hey there, AI! An image has just been uploaded for analysis. Let's assume the image contains complex features, details, and structures. Could you please perform a deep analysis of this uploaded image and produce a detailed textual description? I want you to capture all the essential elements, colors, patterns, objects, orientations, and interactions within this image. The aim is to create a description so comprehensive that someone could recreate a highly similar image based solely on your textual output. Don't leave out any crucial details that contribute to the overall composition of the image. Ready to get started?"
+                            "text": "Hey there, AI! An image has just been uploaded for analysis. Let's assume the image contains complex features, details, and structures. Could you please perform a deep analysis of this uploaded image and produce a detailed textual description? I want you to capture all the essential elements, colors, patterns, objects, orientations, and interactions within this image. The aim is to create a description so comprehensive that someone could recreate a highly similar image based solely on your textual output. Don't leave out any crucial details that contribute to the overall composition of the image."
                         },
                         {
                             "type": "image_url",
