@@ -6,7 +6,9 @@ This project is to tie together various LLM-related pieces, to try and build an 
 
 Checkout the source code, cd to the "agent" directory, install dependencies by running:
 
-python -m pip install -U --upgrade-strategy eager --force-reinstall -r requirements.txt
+`poetry install`
+
+If you don't have poetry installed already, please see https://python-poetry.org/docs/ for instructions.
 
 Then run `python ./client_gradio.py` to start the agent, and look for the locahost URI printed in the output - you should
 be able to web browse to that.
